@@ -22,12 +22,12 @@ Most agent environments expose these as `mcp__keboola__*`. The exact tool surfac
 
 ### kbagent CLI
 
-Source: https://github.com/padak/keboola_agent_cli
+Source: https://github.com/keboola/cli
 
 Command-line tool for Keboola operations. Install:
 
 ```bash
-uv tool install git+https://github.com/padak/keboola_agent_cli
+curl -LsSf https://raw.githubusercontent.com/keboola/cli/main/install.sh | sh
 ```
 
 Configure a project:
