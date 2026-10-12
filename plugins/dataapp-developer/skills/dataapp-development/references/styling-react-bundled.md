@@ -198,7 +198,7 @@ A React render-time crash unmounts every component above the failure. Without a 
 1. **The app root** in an `<ErrorBoundary>` so any uncaught render error is shown to the user, not silently swallowed.
 2. **Each chart card / data widget** in its own boundary so one failing chart doesn't take the whole dashboard down.
 
-The template's `preview-signal.js` already listens for uncaught errors and rejections and reports them to Keboola's app preview.
+`kaiPreview()` in the template's `vite.config.ts` already listens for uncaught errors and rejections and reports them to Keboola's app preview.
 
 The React Docs cover the class-component pattern (`getDerivedStateFromError` + `componentDidCatch`); there are also a few small library options (`react-error-boundary`). Either is fine — what matters is that something catches.
 

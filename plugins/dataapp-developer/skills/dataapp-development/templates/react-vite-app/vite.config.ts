@@ -1,20 +1,13 @@
-import { readFileSync } from 'node:fs';
 import { kaiPreview } from '@keboola/vite-plugin-kai-preview';
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
-const previewSignal = readFileSync(new URL('./preview-signal.js', import.meta.url), 'utf8');
-
 export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
-    {
-      name: 'keboola-preview-signal',
-      transformIndexHtml: () => [{ tag: 'script', injectTo: 'head-prepend', children: previewSignal }],
-    },
-    // Dev only: lets Keboola's app preview pick parts of the page and tell Kai where each is written.
+    // Tells Keboola's app preview whether the page rendered or crashed; in dev, lets it pick parts of the page.
     kaiPreview(),
   ],
   server: {

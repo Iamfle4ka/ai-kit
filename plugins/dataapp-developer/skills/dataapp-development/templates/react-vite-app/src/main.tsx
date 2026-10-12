@@ -10,7 +10,7 @@ import { queryClient } from './lib/api';
 
 declare global {
   interface Window {
-    /** Set by preview-signal.js: reports an error to Keboola's app preview. */
+    /** Set by kaiPreview() in vite.config.ts: reports an error to Keboola's app preview. */
     __kaiNotifyError?: (message: string) => void;
     /** Set on a render crash, so the preview is never told the app is healthy. */
     __kaiPreviewCrashed?: boolean;

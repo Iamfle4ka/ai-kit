@@ -9,10 +9,7 @@ Copy the whole directory into the app's repo root as its first commit, then repl
 ```
 .
 ├── index.html                    # Vite entry
-├── preview-signal.js             # tells Keboola's app preview "rendered" / "crashed" — keep it
-├── preview-picker.js             # dev only: lets the user pick a part of the page in the preview — keep it
-├── preview-source.js             # dev only: stamps elements with data-kai-source="file:line:col" — keep it
-├── vite.config.ts                # dev server :3000, HMR over wss, /api proxy → :3100, injects the preview scripts
+├── vite.config.ts                # dev server :3000, HMR over wss, /api proxy → :3100, kaiPreview() for Keboola's app preview — keep it
 ├── tsconfig.json                 # one config for src/, server/ and vite.config.ts
 ├── package.json                  # ESM ("type": "module"); lockfile committed
 ├── public/keboola-logo.svg       # "Powered by Keboola" footer
