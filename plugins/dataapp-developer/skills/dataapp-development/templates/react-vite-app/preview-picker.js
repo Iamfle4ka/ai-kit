@@ -127,7 +127,8 @@
       sourceTrail: trail,
       selector: clip(selectorOf(el), MAX_SELECTOR),
       tag: el.tagName.toLowerCase(),
-      text: clip((el.textContent || '').slice(0, MAX_TEXT * 4).replace(/\s+/g, ' ').trim(), MAX_TEXT),
+      // `innerText`, not `textContent`: block boundaries become spaces, so a container reads as words.
+      text: clip((el.innerText || el.textContent || '').slice(0, MAX_TEXT * 4).replace(/\s+/g, ' ').trim(), MAX_TEXT),
       html: clip(html, MAX_HTML),
       rect: { x: Math.round(r.left), y: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) },
       page: location.pathname + location.search + location.hash,
