@@ -6,6 +6,7 @@ import { createQueryServiceSdk, type ExecuteQueryOptions } from '@keboola/api-cl
  * Runs SQL in the app's Storage workspace through the Query Service SDK and returns every row.
  *
  * - Works on Snowflake and BigQuery; only the SQL dialect differs (`references/storage-access.md`).
+ * - Row keys are lower case (`COUNT(*) AS n` is `n` on both backends); `parseCell` types the values.
  * - Env vars are read per call, so a missing one fails that request, not the server start.
  * - Every row, or `[]` for a statement without a result set (INSERT, UPDATE); fewer rows than the service counted is an error.
  * - Logs row counts and a redacted SQL preview, never values.
@@ -31,13 +32,39 @@ export async function runQuery(sql: string, options?: ExecuteQueryOptions): Prom
       const data = err.data as { exception?: string; message?: string } | undefined;
       throw new Error(`query service ${err.response.status}: ${data?.exception ?? data?.message ?? err.message}`);
     });
-  const columns = result.columns?.map((c) => c.name) ?? [];
-  const rows = (result.data ?? []).map((row) => Object.fromEntries(columns.map((name, i) => [name, row[i]])));
+  const columns = (result.columns ?? []).map((c) => ({ key: c.name.toLowerCase(), type: c.type }));
+  const rows = (result.data ?? []).map((row) =>
+    Object.fromEntries(columns.map((c, i) => [c.key, parseCell(row[i] ?? null, c.type)])),
+  );
   if (options?.maxRows === undefined && result.numberOfRows !== undefined && rows.length < result.numberOfRows) {
     throw new Error(`kbcQuery: got ${rows.length} of ${result.numberOfRows} rows`);
   }
   console.debug(`[kbcQuery] ${rows.length} rows <- ${previewSql(sql)}`);
   return rows;
+}
+
+const NUMBER_TYPE = /^(fixed|real|integer|int64|float|float64|numeric|bignumeric)$/i;
+const EPOCH = /^-?\d+(\.\d+)?( \d+)?$/;
+
+/**
+ * Types a Query Service cell (always a string or null) by its column type.
+ *
+ * 1. Numbers become numbers; an integer past 2^53 stays a string, so IDs keep every digit.
+ * 2. Booleans become `true`/`false`.
+ * 3. Snowflake `date` (epoch days) and `timestamp_*` (epoch seconds) become `YYYY-MM-DD` / ISO.
+ * 4. Anything else stays the string the warehouse sent.
+ */
+function parseCell(cell: string | null, type: string): unknown {
+  if (cell === null) return null;
+  if (NUMBER_TYPE.test(type)) {
+    const n = Number(cell);
+    return Number.isSafeInteger(n) || (Number.isFinite(n) && !Number.isInteger(n)) ? n : cell;
+  }
+  if (/^bool(ean)?$/i.test(type)) return cell === 'true';
+  if (!EPOCH.test(cell)) return cell;
+  if (/^date$/i.test(type)) return new Date(Number(cell) * 86_400_000).toISOString().slice(0, 10);
+  if (/^timestamp_/i.test(type)) return new Date(parseFloat(cell) * 1000).toISOString();
+  return cell;
 }
 
 let indexedQueryServiceUrl: Promise<string> | undefined;
@@ -64,6 +91,12 @@ function queryServiceUrlFromIndex(kbcUrl: string): Promise<string> {
   return indexedQueryServiceUrl;
 }
 
+/**
+ * The Storage access env vars, as the data-app image provides them.
+ *
+ * - `WORKSPACE_ID` and `KBC_TOKEN` come from the platform's workspace manifest and token file.
+ * - The image restarts the app when either rotates, so `process.env` is always current.
+ */
 function readEnv() {
   const env = {
     KBC_URL: process.env.KBC_URL,
