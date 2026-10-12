@@ -31,23 +31,17 @@
     }
   }
 
-  function box(label) {
+  // An outline only: what the part is called is the Builder's to say, not a label over the page.
+  function box() {
     var el = document.createElement('div');
     el.setAttribute('data-kai-picker', '');
     el.style.cssText =
       'position:fixed;z-index:2147483647;pointer-events:none;box-sizing:border-box;display:none;' +
       'border:2px solid ' + COLOR + ';border-radius:3px;background:rgba(31,143,255,.08);';
-    if (label) {
-      var tag = document.createElement('div');
-      tag.style.cssText =
-        'position:absolute;left:-2px;bottom:100%;margin-bottom:2px;padding:1px 6px;border-radius:3px;white-space:nowrap;' +
-        'background:' + COLOR + ';color:#fff;font:500 11px/16px ui-sans-serif,system-ui,sans-serif;';
-      el.appendChild(tag);
-    }
     return el;
   }
-  var hoverBox = box(true);
-  var markBox = box(false);
+  var hoverBox = box();
+  var markBox = box();
   markBox.style.borderStyle = 'dashed';
 
   function place(el, target) {
@@ -63,10 +57,6 @@
     el.style.height = r.height + 'px';
   }
 
-  function sourceOf(el) {
-    var tagged = el.closest('[data-kai-source]');
-    return tagged ? tagged.getAttribute('data-kai-source') : null;
-  }
   // Distinct sources from the part outwards: where a shared component is used, not only written.
   function sourceTrail(el) {
     var trail = [];
@@ -130,10 +120,6 @@
     if (el === hovered) return;
     hovered = el;
     place(hoverBox, hovered);
-    var source = hovered && sourceOf(hovered);
-    hoverBox.firstChild.textContent = hovered
-      ? hovered.tagName.toLowerCase() + (source ? ' · ' + source.replace(/:\d+$/, '') : '')
-      : '';
   }
   function block(ev) {
     ev.preventDefault();
