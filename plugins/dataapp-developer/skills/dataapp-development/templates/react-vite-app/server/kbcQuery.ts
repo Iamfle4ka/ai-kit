@@ -1,9 +1,11 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 /**
  * Runs SQL in the app's Storage workspace through the Query Service and returns every row.
  *
  * - Works on Snowflake and BigQuery; only the SQL dialect differs (`references/storage-access.md`).
+ * - Row keys are lower case (`COUNT(*) AS n` is `n` on both backends); `parseCell` types the values.
  * - Env vars are read per call, so a missing one fails that request, not the server start.
  * - Logs row counts and a redacted SQL preview, never values.
  */
@@ -40,19 +42,21 @@ export async function runQuery(
   // Page by what came back, not by `pageSize`: the service may cap a page lower.
   // A statement without a result set (INSERT, UPDATE) has no `data` and returns [].
   const rows: Record<string, unknown>[] = [];
-  let columns: string[] = [];
+  let columns: { key: string; type: string }[] = [];
   let total = Infinity;
   for (let offset = 0; offset < total; ) {
     const page = await call<QueryPage>(
       `queries/${queryJobId}/${job.statements[0].id}/results?offset=${offset}&pageSize=${pageSize}`,
     );
     if (offset === 0) {
-      columns = (page.columns ?? []).map((c) => c.name);
+      columns = (page.columns ?? []).map((c) => ({ key: c.name.toLowerCase(), type: c.type }));
       total = page.numberOfRows ?? Infinity;
     }
     const data = page.data ?? [];
     if (!data.length) break;
-    for (const row of data) rows.push(Object.fromEntries(columns.map((name, i) => [name, row[i]])));
+    for (const row of data) {
+      rows.push(Object.fromEntries(columns.map((c, i) => [c.key, parseCell(row[i], c.type)])));
+    }
     offset += data.length;
     if (total === Infinity && data.length < pageSize) break;
   }
@@ -63,8 +67,42 @@ export async function runQuery(
 export type QueryOptions = { timeoutMs?: number; pageSize?: number; signal?: AbortSignal };
 
 type QueryJob = { status: string; statements: { id: string; error?: string }[] };
-type QueryPage = { columns?: { name: string }[]; data?: unknown[][]; numberOfRows?: number };
+type QueryPage = {
+  columns?: { name: string; type: string }[];
+  data?: (string | null)[][];
+  numberOfRows?: number;
+};
 
+const NUMBER_TYPE = /^(fixed|real|integer|int64|float|float64|numeric|bignumeric)$/i;
+const EPOCH = /^-?\d+(\.\d+)?( \d+)?$/;
+
+/**
+ * Types a Query Service cell (always a string or null) by its column type.
+ *
+ * 1. Numbers become numbers; an integer past 2^53 stays a string, so IDs keep every digit.
+ * 2. Booleans become `true`/`false`.
+ * 3. Snowflake `date` (epoch days) and `timestamp_*` (epoch seconds) become `YYYY-MM-DD` / ISO.
+ * 4. Anything else stays the string the warehouse sent.
+ */
+function parseCell(cell: string | null, type: string): unknown {
+  if (cell === null) return null;
+  if (NUMBER_TYPE.test(type)) {
+    const n = Number(cell);
+    return Number.isSafeInteger(n) || (Number.isFinite(n) && !Number.isInteger(n)) ? n : cell;
+  }
+  if (/^bool(ean)?$/i.test(type)) return cell === 'true';
+  if (!EPOCH.test(cell)) return cell;
+  if (/^date$/i.test(type)) return new Date(Number(cell) * 86_400_000).toISOString().slice(0, 10);
+  if (/^timestamp_/i.test(type)) return new Date(parseFloat(cell) * 1000).toISOString();
+  return cell;
+}
+
+/**
+ * The Storage access env vars, as the data-app image provides them.
+ *
+ * - `WORKSPACE_ID` and `KBC_TOKEN` come from the platform's workspace manifest and token file.
+ * - The image restarts the app when either rotates, so `process.env` is always current.
+ */
 function readEnv() {
   const env = {
     KBC_URL: process.env.KBC_URL,
