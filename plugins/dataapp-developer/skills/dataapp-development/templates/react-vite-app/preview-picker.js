@@ -1,8 +1,8 @@
-// Lets the user pick a part of the page in Keboola's app preview. Injected into <head> by vite.config.ts in dev.
+// Lets the user pick parts of the page in Keboola's app preview. Injected into <head> by vite.config.ts in dev.
 // - Announces `kai-preview-picker-ready` on load and again on `kai-preview-picker-ping`.
-// - Parent → page: `kai-preview-pick-start`, `kai-preview-pick-stop`, `kai-preview-pick-clear` (drops the marker).
-// - Page → parent: `kai-preview-picked` with the part's context, `kai-preview-pick-cancelled` on Escape.
-// - The context names where the part's JSX is written (`data-kai-source`, stamped by preview-source.js).
+// - Parent → page: `kai-preview-pick-start`, `-pick-stop`, `-pick-clear` (one part by `id`, or all).
+// - Page → parent: `kai-preview-picked` / `-unpicked` (a picked part clicked again), `-pick-cancelled` on Escape.
+// - Picked parts keep numbered markers; a part's context names where its JSX is written (preview-source.js).
 // - Only the embedding parent is obeyed or told anything.
 (function () {
   if (window.parent === window || window.__kaiPreviewPicker) return;
@@ -41,8 +41,37 @@
     return el;
   }
   var hoverBox = box();
-  var markBox = box();
-  markBox.style.borderStyle = 'dashed';
+
+  // A picked part's dashed outline, numbered in the order it was picked.
+  function markOf(el) {
+    var mark = box();
+    mark.style.borderStyle = 'dashed';
+    var badge = document.createElement('div');
+    badge.style.cssText =
+      // On the outline's corner, clear of the part's own content.
+      'position:absolute;left:-10px;top:-10px;min-width:18px;height:18px;padding:0 5px;box-sizing:border-box;' +
+      'border-radius:9px;background:' + COLOR + ';color:#fff;text-align:center;box-shadow:0 0 0 2px #fff;' +
+      'font:600 11px/18px ui-sans-serif,system-ui,sans-serif;';
+    mark.appendChild(badge);
+    document.documentElement.append(mark);
+    return { id: 'p' + ++lastId, el: el, box: mark };
+  }
+  var lastId = 0;
+  var marks = [];
+  function renumber() {
+    marks.forEach(function (m, i) {
+      m.box.firstChild.textContent = String(i + 1);
+      place(m.box, m.el);
+    });
+  }
+  function unmark(id) {
+    marks = marks.filter(function (m) {
+      if (id && m.id !== id) return true;
+      m.box.remove();
+      return false;
+    });
+    renumber();
+  }
 
   function place(el, target) {
     if (!target || !target.isConnected) {
@@ -108,7 +137,6 @@
 
   var picking = false;
   var hovered = null;
-  var marked = null;
 
   function targetOf(ev) {
     var el = ev.target;
@@ -129,10 +157,17 @@
     block(ev);
     var el = targetOf(ev);
     if (!el) return;
-    stop();
-    marked = el;
-    place(markBox, marked);
-    post({ type: 'kai-preview-picked', selection: describe(el) });
+    var picked = marks.find(function (m) {
+      return m.el === el;
+    });
+    if (picked) {
+      unmark(picked.id);
+      return post({ type: 'kai-preview-unpicked', id: picked.id });
+    }
+    var mark = markOf(el);
+    marks.push(mark);
+    renumber();
+    post({ type: 'kai-preview-picked', id: mark.id, selection: describe(el) });
   }
   function onKey(ev) {
     if (ev.key !== 'Escape') return;
@@ -159,7 +194,7 @@
   function start() {
     if (picking) return;
     picking = true;
-    if (!hoverBox.isConnected) document.documentElement.append(hoverBox, markBox);
+    if (!hoverBox.isConnected) document.documentElement.append(hoverBox);
     document.documentElement.style.cursor = 'crosshair';
     listen(true);
   }
@@ -173,7 +208,9 @@
   }
   function follow() {
     if (hovered) place(hoverBox, hovered);
-    if (marked) place(markBox, marked);
+    marks.forEach(function (m) {
+      place(m.box, m.el);
+    });
   }
   window.addEventListener('scroll', follow, true);
   window.addEventListener('resize', follow);
@@ -189,8 +226,7 @@
       case 'kai-preview-pick-stop':
         return stop();
       case 'kai-preview-pick-clear':
-        marked = null;
-        return place(markBox, null);
+        return unmark(typeof ev.data.id === 'string' ? ev.data.id : null);
     }
   });
   post({ type: 'kai-preview-picker-ready' });
