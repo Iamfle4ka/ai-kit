@@ -10,7 +10,9 @@ Copy the whole directory into the app's repo root as its first commit, then repl
 .
 ├── index.html                    # Vite entry
 ├── preview-signal.js             # tells Keboola's app preview "rendered" / "crashed" — keep it
-├── vite.config.ts                # dev server :3000, HMR over wss, /api proxy → :3100, injects preview-signal.js
+├── preview-picker.js             # dev only: lets the user pick a part of the page in the preview — keep it
+├── preview-source.js             # dev only: stamps elements with data-kai-source="file:line:col" — keep it
+├── vite.config.ts                # dev server :3000, HMR over wss, /api proxy → :3100, injects the preview scripts
 ├── tsconfig.json                 # one config for src/, server/ and vite.config.ts
 ├── package.json                  # ESM ("type": "module"); lockfile committed
 ├── public/keboola-logo.svg       # "Powered by Keboola" footer
@@ -40,6 +42,10 @@ Copy the whole directory into the app's repo root as its first commit, then repl
 | Build | none | `vite build` |
 
 In dev, push and watch: client edits hot-reload, server edits restart Express in about a second (the client retries meanwhile), a `package.json` change re-installs. Call `deploy_data_app` again only to switch branch or revive a stopped container.
+
+## Picking a part in the preview
+
+In dev mode the user can pick a part of the page in Keboola's app preview and ask for a change to it. The request arrives with the part's context; its `source` is the `file:line:col` of the picked element's JSX, and `sourceTrail` lists the enclosing elements' locations, outermost last. Edit there. `vite build` ships none of it.
 
 ## Data and errors
 

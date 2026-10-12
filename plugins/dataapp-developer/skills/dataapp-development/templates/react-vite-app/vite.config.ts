@@ -4,6 +4,10 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 
 const previewSignal = readFileSync(new URL('./preview-signal.js', import.meta.url), 'utf8');
+const previewPicker = readFileSync(new URL('./preview-picker.js', import.meta.url), 'utf8');
+const previewSource = readFileSync(new URL('./preview-source.js', import.meta.url), 'utf8');
+const PREVIEW_SOURCE_ID = '\0keboola-preview-source';
+let viteRoot = '';
 
 export default defineConfig({
   plugins: [
@@ -12,6 +16,22 @@ export default defineConfig({
     {
       name: 'keboola-preview-signal',
       transformIndexHtml: () => [{ tag: 'script', injectTo: 'head-prepend', children: previewSignal }],
+    },
+    // Dev only: the preview's part picker, and the source location it reports for each element.
+    {
+      name: 'keboola-preview-picker',
+      apply: 'serve',
+      enforce: 'pre',
+      configResolved: (config) => {
+        viteRoot = config.root;
+      },
+      transformIndexHtml: () => [{ tag: 'script', injectTo: 'head-prepend', children: previewPicker }],
+      resolveId: (id, importer) =>
+        id === 'react/jsx-dev-runtime' && importer !== PREVIEW_SOURCE_ID ? PREVIEW_SOURCE_ID : undefined,
+      load: (id) => {
+        if (id !== PREVIEW_SOURCE_ID) return;
+        return `const ROOT = ${JSON.stringify(`${viteRoot}/`)};\n${previewSource}`;
+      },
     },
   ],
   server: {
