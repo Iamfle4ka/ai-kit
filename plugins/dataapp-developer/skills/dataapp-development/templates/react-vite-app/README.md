@@ -45,7 +45,7 @@ In dev, push and watch: client edits hot-reload, server edits restart Express in
 
 ## Picking a part in the preview
 
-In dev mode the user can pick a part of the page in Keboola's app preview and ask for a change to it. The request arrives with the part's context; its `source` is the `file:line:col` of the picked element's JSX, and `sourceTrail` lists the enclosing elements' locations, outermost last. Edit there. `vite build` ships none of it.
+In dev mode the user can pick a part of the page in Keboola's app preview and ask for a change to it. `kaiPreview()` from `@keboola/vite-plugin-kai-preview` in `vite.config.ts` makes that possible; keep it. The request arrives with the part's context; its `source` is the `file:line:col` of the picked element's JSX, and `sourceTrail` lists the enclosing elements' locations, outermost last. Edit there. `vite build` ships none of it.
 
 ## Data and errors
 
