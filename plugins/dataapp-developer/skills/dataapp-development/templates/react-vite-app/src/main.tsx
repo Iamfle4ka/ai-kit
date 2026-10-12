@@ -2,6 +2,7 @@ import { Component, StrictMode } from 'react';
 import type { ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
+import type { KaiPreviewWindow } from '@keboola/vite-plugin-kai-preview';
 
 import './index.css';
 
@@ -9,12 +10,8 @@ import { App } from './App';
 import { queryClient } from './lib/api';
 
 declare global {
-  interface Window {
-    /** Set by kaiPreview() in vite.config.ts: reports an error to Keboola's app preview. */
-    __kaiNotifyError?: (message: string) => void;
-    /** Set on a render crash, so the preview is never told the app is healthy. */
-    __kaiPreviewCrashed?: boolean;
-  }
+  // How the boundary below reports a crash to Keboola's app preview (kaiPreview() in vite.config.ts).
+  interface Window extends KaiPreviewWindow {}
 }
 
 /** Shows a fallback on a render crash and reports it to the preview. */
