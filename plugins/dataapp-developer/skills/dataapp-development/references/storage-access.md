@@ -639,7 +639,7 @@ The DataFrame's dtype stays `object` (string) until you explicitly convert. Conv
 
 **JavaScript (when using `@keboola/api-client`'s `queryService` client directly):** zip `result.data` with `result.columns` to produce objects, and coerce numeric columns. Inspect the actual `column.type` values returned by the API for your project — they're driver-dependent (Snowflake reports lowercase internal names like `"text"`, `"fixed"`, `"real"`, `"timestamp_ntz"`; BigQuery reports uppercase `"INTEGER"`, `"FLOAT"`, `"NUMERIC"`, `"BOOLEAN"`, `"DATE"`, `"TIMESTAMP"`). Don't hand the raw `result.data` straight to the UI layer.
 
-The React + Vite template's `runQuery` (`server/kbcQuery.ts`) already does this, and also turns Snowflake's epoch-encoded `date` / `timestamp_*` cells into `YYYY-MM-DD` / ISO strings.
+The React + Vite template's `runQuery` (`server/kbcQuery.ts`) already does this, turns Snowflake's epoch-encoded `date` cells into `YYYY-MM-DD`, and returns timestamps from both backends as ISO strings.
 
 ```javascript
 function toObjects(result) {

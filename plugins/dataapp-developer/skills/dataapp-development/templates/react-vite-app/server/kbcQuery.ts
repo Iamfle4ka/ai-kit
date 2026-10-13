@@ -1,4 +1,3 @@
-import { existsSync, readFileSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 /**
@@ -75,14 +74,16 @@ type QueryPage = {
 
 const NUMBER_TYPE = /^(fixed|real|integer|int64|float|float64|numeric|bignumeric)$/i;
 const EPOCH = /^-?\d+(\.\d+)?( \d+)?$/;
+const BIGQUERY_TIMESTAMP = /^(\S+) (\S+) \+0000 UTC$/;
 
 /**
  * Types a Query Service cell (always a string or null) by its column type.
  *
  * 1. Numbers become numbers; an integer past 2^53 stays a string, so IDs keep every digit.
  * 2. Booleans become `true`/`false`.
- * 3. Snowflake `date` (epoch days) and `timestamp_*` (epoch seconds) become `YYYY-MM-DD` / ISO.
- * 4. Anything else stays the string the warehouse sent.
+ * 3. Snowflake `date` (epoch days) becomes `YYYY-MM-DD`.
+ * 4. Timestamps become ISO: Snowflake sends epoch seconds, BigQuery `2026-10-12 04:05:13 +0000 UTC`.
+ * 5. Anything else stays the string the warehouse sent.
  */
 function parseCell(cell: string | null, type: string): unknown {
   if (cell === null) return null;
@@ -91,9 +92,13 @@ function parseCell(cell: string | null, type: string): unknown {
     return Number.isSafeInteger(n) || (Number.isFinite(n) && !Number.isInteger(n)) ? n : cell;
   }
   if (/^bool(ean)?$/i.test(type)) return cell === 'true';
-  if (!EPOCH.test(cell)) return cell;
-  if (/^date$/i.test(type)) return new Date(Number(cell) * 86_400_000).toISOString().slice(0, 10);
-  if (/^timestamp_/i.test(type)) return new Date(parseFloat(cell) * 1000).toISOString();
+  if (/^date$/i.test(type) && EPOCH.test(cell)) {
+    return new Date(Number(cell) * 86_400_000).toISOString().slice(0, 10);
+  }
+  if (/^timestamp/i.test(type)) {
+    if (EPOCH.test(cell)) return new Date(parseFloat(cell) * 1000).toISOString();
+    return cell.replace(BIGQUERY_TIMESTAMP, '$1T$2Z');
+  }
   return cell;
 }
 
