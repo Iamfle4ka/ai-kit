@@ -6,8 +6,8 @@ import type { KaiPreviewWindow } from '@keboola/vite-plugin-kai-preview';
 
 import './index.css';
 
-import { App } from './App';
-import { queryClient } from './lib/api';
+import { App } from './App.tsx';
+import { queryClient } from './lib/api.ts';
 
 declare global {
   // How the boundary below reports a crash to Keboola's app preview (kaiPreview() in vite.config.ts).
