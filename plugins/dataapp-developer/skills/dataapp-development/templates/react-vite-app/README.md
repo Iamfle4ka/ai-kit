@@ -9,8 +9,7 @@ Copy the whole directory into the app's repo root as its first commit, then repl
 ```
 .
 ├── index.html                    # Vite entry
-├── preview-signal.js             # tells Keboola's app preview "rendered" / "crashed" — keep it
-├── vite.config.ts                # dev server :3000, HMR over wss, /api proxy → :3100, injects preview-signal.js
+├── vite.config.ts                # dev server :3000, HMR over wss, /api proxy → :3100, kaiPreview() for Keboola's app preview — keep it
 ├── tsconfig.json                 # one config for src/, server/ and vite.config.ts; Node runs server/ as-is
 ├── package.json                  # ESM ("type": "module"), Node >= 24; lockfile committed
 ├── public/keboola-logo.svg       # "Powered by Keboola" footer
@@ -26,7 +25,7 @@ Copy the whole directory into the app's repo root as its first commit, then repl
     ├── nginx/sites/default.conf  # 8888 → :3000, answers the platform's POST / health check, gzip
     ├── setup.sh / setup-dev.sh   # prod: npm install + vite build · dev: npm install
     ├── supervisord/services/app.conf             # prod: node server/index.ts on :3000
-    └── supervisord-dev/services/{vite,api}.conf  # dev: vite on :3000, node --watch on :3100
+    └── supervisord-dev/services/{app,api}.conf   # dev: vite on :3000 (as `app`), node --watch on :3100
 ```
 
 ## Dev and prod
@@ -40,6 +39,10 @@ Copy the whole directory into the app's repo root as its first commit, then repl
 | Build | none | `vite build` |
 
 In dev, push and watch: client edits hot-reload, server edits restart Express in about a second (the client retries meanwhile), a `package.json` change re-installs. Call `deploy_data_app` again only to switch branch or revive a stopped container.
+
+## Picking a part in the preview
+
+In dev mode the user can pick a part of the page in Keboola's app preview and ask for a change to it. `kaiPreview()` from `@keboola/vite-plugin-kai-preview` in `vite.config.ts` makes that possible; keep it. The request arrives with the part's context; its `source` is the `file:line:col` of the picked element's JSX, and `sourceTrail` lists the enclosing elements' locations, outermost last. Edit there. `vite build` ships none of it.
 
 ## Node 24
 

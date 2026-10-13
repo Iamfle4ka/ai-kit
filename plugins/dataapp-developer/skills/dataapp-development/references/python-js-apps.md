@@ -9,6 +9,7 @@
 - POST handling on /
 - Python dependencies (`uv sync`, no `pip install`)
 - Default shape: React + Vite + Express in one Node container
+- Keboola's app preview: `kaiPreview()` in every Vite app
 - Multi-server pattern (Python backend + JS frontend)
 - Local development
 - Keboola-hosted dev mode (`KBC_APP_MODE=dev`)
@@ -180,6 +181,26 @@ Why it wins:
 
 Pairs with [duckdb-caching.md](duckdb-caching.md) by default — for read-only dashboards, cache once into an in-memory DuckDB so the dashboard never re-hits Snowflake on a page render.
 
+## Keboola's app preview: `kaiPreview()` in every Vite app
+
+`@keboola/vite-plugin-kai-preview` connects a Vite app to the preview in Keboola's app Builder:
+
+- On every page, in dev and in the build, it tells the preview whether the app rendered or crashed.
+- On the dev server, it lets the user pick parts of the page. Their message then names where each part is written (`src/File.tsx:line:col`) — edit there.
+
+The template ships it. An existing Vite app without it gets it in the first change you make to that app, so it works the same as a new one:
+
+1. `npm install --save-dev @keboola/vite-plugin-kai-preview`, and commit the lockfile.
+2. In `vite.config.ts`, `import { kaiPreview } from '@keboola/vite-plugin-kai-preview'` and add `kaiPreview()` to `plugins`. An app that renders into an element other than `#root` passes it: `kaiPreview({ mount: '#app' })`.
+3. Remove what it replaces, or the preview hears two signals: an inline plugin that injects an error/healthy script (older apps call it `kaiPreviewErrorHandler`), and copied `preview-signal.js`, `preview-picker.js` or `preview-source.js` with the plugins that load them.
+4. Keep the app's error boundary. It still sets `window.__kaiPreviewCrashed` and calls `window.__kaiNotifyError`; type those with the package's `KaiPreviewWindow`.
+5. Type-check and push. The running dev container installs the package and restarts its `app` program, so Vite must run as `[program:app]` in `keboola-config/supervisord-dev/`. An app that still has `[program:vite]` renames it to `app` in the same push. Check the preview for the pick button.
+6. Keep it out of the conversation: the user asked for their change, not this. No progress line about it, no mention in the reply — unless a step fails and holds up their change; then say so in one line.
+
+An app on an older release updates it the same way: `npm install --save-dev @keboola/vite-plugin-kai-preview@^<version>`, then steps 5 and 6.
+
+Without React the picker still works but cannot name source locations. An app not built with Vite gets none of it — leave it as it is.
+
 ## Multi-server pattern (Python backend + JS frontend) — use when you need it
 
 Reach for this only when you actually need a Python backend — an existing Python codebase, an ML model in Python, FastAPI/Flask services that are hard to port. For pure dashboarding the default shape (above) is enough. `templates/python-node-app/` is an overlay: copy `react-vite-app/` first, then the overlay on top. Two processes mean two log streams, two ports, two dependency installs, and a more involved local-dev story.
@@ -231,7 +252,7 @@ For the validate -> build -> verify change loop, see [dev-workflow.md](dev-workf
 
 When the platform sets `KBC_APP_MODE=dev` on the container, the image hot-reloads off the configured git branch. You don't have to redeploy on every push — the running container polls the branch and pulls changes. To opt in, add:
 
-- `keboola-config/supervisord-dev/<program>.conf` — required for dev mode. Hot-reload variant of your supervisord configs (e.g. `streamlit run app.py --server.runOnSave=true`, or `uvicorn --reload`, or `node --watch`).
+- `keboola-config/supervisord-dev/<program>.conf` — required for dev mode. Hot-reload variant of your supervisord configs (e.g. `streamlit run app.py --server.runOnSave=true`, or `uvicorn --reload`, or `node --watch`). After a dependency change the watcher restarts only the program named `app`, so give that name to the one that must reload new packages (in `react-vite-app`, Vite).
 - `keboola-config/setup-dev.sh` — optional. Dev-time dependency install. Falls back to `setup.sh` if absent.
 - `keboola-config/dev-deps` — optional. List of dependency file paths the in-pod watcher hashes for change detection. Lines starting with `#` and blank lines are ignored.
 
