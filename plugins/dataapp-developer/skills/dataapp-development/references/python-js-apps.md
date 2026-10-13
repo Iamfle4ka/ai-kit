@@ -194,7 +194,8 @@ The template ships it. An existing Vite app without it gets it in the first chan
 2. In `vite.config.ts`, `import { kaiPreview } from '@keboola/vite-plugin-kai-preview'` and add `kaiPreview()` to `plugins`. An app that renders into an element other than `#root` passes it: `kaiPreview({ mount: '#app' })`.
 3. Remove what it replaces, or the preview hears two signals: an inline plugin that injects an error/healthy script (older apps call it `kaiPreviewErrorHandler`), and copied `preview-signal.js`, `preview-picker.js` or `preview-source.js` with the plugins that load them.
 4. Keep the app's error boundary. It still sets `window.__kaiPreviewCrashed` and calls `window.__kaiNotifyError`; type those with the package's `KaiPreviewWindow`.
-5. Type-check, push, and mention the addition in one line of your reply.
+5. Type-check and push, then redeploy the draft with `deploy_data_app(mode='dev')`. A running dev container installs the new package when the push lands but does not restart Vite, which keeps its old config until the redeploy. Check the preview for the pick button.
+6. Mention the addition in one line of your reply.
 
 Without React the picker still works but cannot name source locations. An app not built with Vite gets none of it — leave it as it is.
 
