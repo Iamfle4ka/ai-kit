@@ -59,7 +59,7 @@ A new draft every session strands the previous one: it stays on the app, keeps i
 
 To continue `DRAFT`:
 
-1. `get_data_apps(configuration_ids=[DRAFT])`, unless case 4 already read it — its branch is at `configuration.parameters.dataApp.git.branch`; the `drafts` entries lack it.
+1. Its branch is the `git_branch` of its entry in the prod app's `drafts`. Never derive it from the draft's URL or slug: their suffix is not the branch.
 2. `create_python_js_data_app_git_credential(configuration_id=PROD)` for a clone URL (step 3 below).
 3. Check the branch out and merge `main` into it, so the draft builds on what is live. Resolve a conflict before going on:
 
