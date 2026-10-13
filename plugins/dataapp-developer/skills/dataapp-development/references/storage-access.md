@@ -121,7 +121,7 @@ A provisioned compute workspace (Snowflake by default; BigQuery on BigQuery-back
 - Via the UI: project → **Workspaces** → **New Workspace** → Snowflake/BigQuery → pick a size (XS or S is enough). Open the workspace detail and grant it write access on the same tables the app's `direct-grant` output mapping covers.
 - Via kbagent (if you're already on that path): `kbagent workspace create ...` then grant the same tables.
 
-In both cases, use the numeric ID (e.g. `12345`), not the Snowflake schema name (e.g. `WORKSPACE_12345`). See [troubleshooting.md](troubleshooting.md) for the prefix-stripping pattern if you ever encounter the latter.
+In both cases, use the numeric ID (e.g. `12345`), not the Snowflake schema name (e.g. `WORKSPACE_12345`).
 
 Notes:
 - One read-only workspace can serve multiple local-dev sessions across developers — no need to provision per-person.
@@ -316,7 +316,7 @@ Only the **dataset** (bucket) name is mangled — the **table** name keeps its o
 
 For BigQuery projects there's an alternative to the Query Service: post to `{KBC_URL}/v2/storage/branch/<branch>/workspaces/<workspace>/query`. **Prefer the Query Service** (above) for new apps; this endpoint is here as another option — e.g. when you want a synchronous call with native-typed rows, or you're maintaining an app already built on it. The call is synchronous (no submit/poll/paginate) and returns rows as dicts with native types — no string coercion needed. (On Snowflake projects this endpoint returns 404 — see the warning above.)
 
-Required env vars: `KBC_URL`, `KBC_TOKEN`, `WORKSPACE_ID` (numeric, strip any `WORKSPACE_` prefix), `BRANCH_ID` (can be the string `"default"` here — the Storage API accepts it, unlike Query Service).
+Required env vars: `KBC_URL`, `KBC_TOKEN`, `WORKSPACE_ID` (numeric), `BRANCH_ID` (can be the string `"default"` here — the Storage API accepts it, unlike Query Service).
 
 Python:
 
