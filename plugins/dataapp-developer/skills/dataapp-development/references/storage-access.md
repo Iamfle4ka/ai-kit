@@ -121,7 +121,7 @@ A provisioned compute workspace (Snowflake by default; BigQuery on BigQuery-back
 - Via the UI: project → **Workspaces** → **New Workspace** → Snowflake/BigQuery → pick a size (XS or S is enough). Open the workspace detail and grant it write access on the same tables the app's `direct-grant` output mapping covers.
 - Via kbagent (if you're already on that path): `kbagent workspace create ...` then grant the same tables.
 
-In both cases, use the numeric ID (e.g. `12345`), not the Snowflake schema name (e.g. `WORKSPACE_12345`). See [troubleshooting.md](troubleshooting.md) for the prefix-stripping pattern if you ever encounter the latter.
+In both cases, use the numeric ID (e.g. `12345`), not the Snowflake schema name (e.g. `WORKSPACE_12345`).
 
 Notes:
 - One read-only workspace can serve multiple local-dev sessions across developers — no need to provision per-person.
@@ -316,7 +316,7 @@ Only the **dataset** (bucket) name is mangled — the **table** name keeps its o
 
 For BigQuery projects there's an alternative to the Query Service: post to `{KBC_URL}/v2/storage/branch/<branch>/workspaces/<workspace>/query`. **Prefer the Query Service** (above) for new apps; this endpoint is here as another option — e.g. when you want a synchronous call with native-typed rows, or you're maintaining an app already built on it. The call is synchronous (no submit/poll/paginate) and returns rows as dicts with native types — no string coercion needed. (On Snowflake projects this endpoint returns 404 — see the warning above.)
 
-Required env vars: `KBC_URL`, `KBC_TOKEN`, `WORKSPACE_ID` (numeric, strip any `WORKSPACE_` prefix), `BRANCH_ID` (can be the string `"default"` here — the Storage API accepts it, unlike Query Service).
+Required env vars: `KBC_URL`, `KBC_TOKEN`, `WORKSPACE_ID` (numeric), `BRANCH_ID` (can be the string `"default"` here — the Storage API accepts it, unlike Query Service).
 
 Python:
 
@@ -638,6 +638,8 @@ df['created_at'] = pd.to_datetime(df['created_at'], errors='coerce')
 The DataFrame's dtype stays `object` (string) until you explicitly convert. Convert at the boundary — once, right after the query — not inside every chart.
 
 **JavaScript (when using `@keboola/api-client`'s `queryService` client directly):** zip `result.data` with `result.columns` to produce objects, and coerce numeric columns. Inspect the actual `column.type` values returned by the API for your project — they're driver-dependent (Snowflake reports lowercase internal names like `"text"`, `"fixed"`, `"real"`, `"timestamp_ntz"`; BigQuery reports uppercase `"INTEGER"`, `"FLOAT"`, `"NUMERIC"`, `"BOOLEAN"`, `"DATE"`, `"TIMESTAMP"`). Don't hand the raw `result.data` straight to the UI layer.
+
+The React + Vite template's `runQuery` (`server/kbcQuery.ts`) already does this, turns Snowflake's epoch-encoded `date` cells into `YYYY-MM-DD`, and returns timestamps from both backends as ISO strings.
 
 ```javascript
 function toObjects(result) {

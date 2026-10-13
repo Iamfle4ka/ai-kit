@@ -22,7 +22,7 @@ Toolkit for building and deploying Keboola Apps. Provides `dataapp-development`,
 - Dashboard patterns — SQL-first, sidebar filters, charts, formatting, sortable tables
 - Kai integration — optional natural-language assistant via `kai-client`
 - Dev workflow — validate → build → verify loop with Keboola MCP and Playwright MCP
-- Troubleshooting — POST/, PEP 668, WebSocket, streaming, port mismatch, exit 153, workspace ID prefix, missing env vars
+- Troubleshooting — POST/, PEP 668, WebSocket, streaming, port mismatch, exit 153, non-numeric `WORKSPACE_ID`, missing env vars
 
 **Templates included:**
 
@@ -93,7 +93,7 @@ plugins/dataapp-developer/
 
 ## Version
 
-1.8.0
+1.8.1
 
 ## Maintainer
 

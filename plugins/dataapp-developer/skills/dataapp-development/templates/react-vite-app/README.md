@@ -46,7 +46,7 @@ In dev mode the user can pick a part of the page in Keboola's app preview and as
 
 ## Data and errors
 
-- **Server:** `runQuery(sql)` in `server/kbcQuery.ts` runs SQL in the app's workspace through the Query Service and pages through every row. Write the SQL in the project's dialect (`references/storage-access.md`).
+- **Server:** `runQuery(sql)` in `server/kbcQuery.ts` runs SQL in the app's workspace through the Query Service and pages through every row. Write the SQL in the project's dialect (`references/storage-access.md`). Rows come back typed — numbers, booleans, `YYYY-MM-DD` dates, ISO timestamps — with lower-case keys (`COUNT(*) AS n` is `row.n` on both backends).
 - **Client:** `useQuery({ queryKey, queryFn: ({ signal }) => fetchJson(url, { signal }) })`. Results stay fresh for 5 minutes — every refetch is a warehouse query.
 - **Errors:** the API answers `{ error }` as JSON and the client shows it at once. Only "API not up" (network error, 502–504) is retried, with backoff up to ~15 s.
 
