@@ -372,7 +372,7 @@ A few things worth noting on the BQ path that differ from Query Service:
 - **Rows arrive as objects keyed by column name**, not arrays + separate columns metadata. Iterate directly.
 - **Cell values are native types** (numbers, booleans, ISO strings for timestamps) — the string-cell coercion you do on the Query Service path is unnecessary here.
 - **No submit/poll/paginate.** The endpoint returns the full result in one synchronous response. For very large result sets, add a `LIMIT` on the SQL side; the response doesn't paginate.
-- **The skill's templates (`templates/streamlit/`, `templates/nodejs-app/`) are wired for the Query Service with Snowflake quoting.** The Query Service works on BigQuery too, so on a BigQuery project you keep the `keboola-query-service` / `@keboola/api-client` `queryService` client — you only adjust the SQL (backtick quoting and mangled dataset names, see "BigQuery SQL dialect" above). Switch to this Storage API endpoint only if you specifically want it.
+- **The skill's templates (`templates/streamlit/`, `templates/react-vite-app/`) are wired for the Query Service with Snowflake quoting.** The Query Service works on BigQuery too, so on a BigQuery project you keep the same client — the React + Vite template's `runQuery` (`server/kbcQuery.ts`) or `keboola-query-service` in Python — and only adjust the SQL (backtick quoting and mangled dataset names, see "BigQuery SQL dialect" above). Switch to this Storage API endpoint only if you specifically want it.
 
 ## Read-write direct access (Storage Access)
 
@@ -638,6 +638,8 @@ df['created_at'] = pd.to_datetime(df['created_at'], errors='coerce')
 The DataFrame's dtype stays `object` (string) until you explicitly convert. Convert at the boundary — once, right after the query — not inside every chart.
 
 **JavaScript (when using `@keboola/api-client`'s `queryService` client directly):** zip `result.data` with `result.columns` to produce objects, and coerce numeric columns. Inspect the actual `column.type` values returned by the API for your project — they're driver-dependent (Snowflake reports lowercase internal names like `"text"`, `"fixed"`, `"real"`, `"timestamp_ntz"`; BigQuery reports uppercase `"INTEGER"`, `"FLOAT"`, `"NUMERIC"`, `"BOOLEAN"`, `"DATE"`, `"TIMESTAMP"`). Don't hand the raw `result.data` straight to the UI layer.
+
+The React + Vite template's `runQuery` (`server/kbcQuery.ts`) already does this, turns Snowflake's epoch-encoded `date` cells into `YYYY-MM-DD`, and returns timestamps from both backends as ISO strings.
 
 ```javascript
 function toObjects(result) {
