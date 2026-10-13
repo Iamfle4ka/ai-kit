@@ -24,7 +24,7 @@
     "recharts": "^3.10.1"
   },
   "devDependencies": {
-    "@keboola/vite-plugin-kai-preview": "^0.1.0",
+    "@keboola/vite-plugin-kai-preview": "^1.0.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/express": "^5.0.6",
     "@types/node": "^24.15.0",
