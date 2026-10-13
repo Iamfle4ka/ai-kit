@@ -25,7 +25,7 @@ Copy the whole directory into the app's repo root as its first commit, then repl
     ├── nginx/sites/default.conf  # 8888 → :3000, answers the platform's POST / health check, gzip
     ├── setup.sh / setup-dev.sh   # prod: npm install + vite build · dev: npm install
     ├── supervisord/services/app.conf             # prod: tsx server/index.ts on :3000
-    └── supervisord-dev/services/{vite,api}.conf  # dev: vite on :3000, tsx watch on :3100
+    └── supervisord-dev/services/{app,api}.conf   # dev: vite on :3000 (as `app`), tsx watch on :3100
 ```
 
 ## Dev and prod
