@@ -10,6 +10,7 @@
 - App won't start / restart loop
 - Port mismatch local vs Keboola
 - Exit code 153
+- Dev API picks up only the first push
 - `workspace.workspaceNotFound` 404
 - Non-numeric `WORKSPACE_ID` (`WORKSPACE_<id>`)
 - 500 from missing env var
@@ -53,6 +54,12 @@
 **Cause:** The port in `nginx/sites/default.conf` `proxy_pass` doesn't match the port the app listens on.
 
 **Fix:** Make them match. Common conventions: Flask 5000, FastAPI/Streamlit (production) 8050, Node/Express 3000. Streamlit's `--server.port 8050` flag overrides its default 8501.
+
+## Dev API picks up only the first push
+
+**Cause:** `keboola-config/supervisord-dev/` runs the Node server under `node --watch`. Each push replaces the changed files by write-and-rename, and on Linux `node --watch` sees only the first replacement, so later server changes never load.
+
+**Fix:** Switch it to `tsx watch` with `CHOKIDAR_USEPOLLING="1"` and add `tsx` to `devDependencies`, as `templates/react-vite-app/keboola-config/supervisord-dev/services/api.conf` does. The change loads on that same push.
 
 ## Exit code 153
 

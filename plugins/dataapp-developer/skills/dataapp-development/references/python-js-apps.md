@@ -252,7 +252,7 @@ For the validate -> build -> verify change loop, see [dev-workflow.md](dev-workf
 
 When the platform sets `KBC_APP_MODE=dev` on the container, the image hot-reloads off the configured git branch. You don't have to redeploy on every push — the running container polls the branch and pulls changes. To opt in, add:
 
-- `keboola-config/supervisord-dev/<program>.conf` — required for dev mode. Hot-reload variant of your supervisord configs (e.g. `streamlit run app.py --server.runOnSave=true`, or `uvicorn --reload`, or `node --watch`). After a dependency change the watcher restarts only the program named `app`, so give that name to the one that must reload new packages (in `react-vite-app`, Vite).
+- `keboola-config/supervisord-dev/<program>.conf` — required for dev mode. Hot-reload variant of your supervisord configs (e.g. `streamlit run app.py --server.runOnSave=true`, or `uvicorn --reload`). Each push replaces the changed files by write-and-rename, so a dev watcher must poll: Vite with `watch.usePolling`, a Node server under `tsx watch` with `CHOKIDAR_USEPOLLING="1"`. After a dependency change the watcher restarts only the program named `app`, so give that name to the one that must reload new packages (in `react-vite-app`, Vite).
 - `keboola-config/setup-dev.sh` — optional. Dev-time dependency install. Falls back to `setup.sh` if absent.
 - `keboola-config/dev-deps` — optional. List of dependency file paths the in-pod watcher hashes for change detection. Lines starting with `#` and blank lines are ignored.
 

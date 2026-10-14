@@ -25,7 +25,7 @@ Copy the whole directory into the app's repo root as its first commit, then repl
     ├── nginx/sites/default.conf  # 8888 → :3000, answers the platform's POST / health check, gzip
     ├── setup.sh / setup-dev.sh   # prod: npm install + vite build · dev: npm install
     ├── supervisord/services/app.conf             # prod: node server/index.ts on :3000
-    └── supervisord-dev/services/{app,api}.conf   # dev: vite on :3000 (as `app`), node --watch on :3100
+    └── supervisord-dev/services/{app,api}.conf   # dev: vite on :3000 (as `app`), tsx watch on :3100
 ```
 
 ## Dev and prod
@@ -35,7 +35,7 @@ Copy the whole directory into the app's repo root as its first commit, then repl
 | | Dev | Prod |
 |---|---|---|
 | `:3000` | Vite: client with HMR, `/api` proxied to `:3100` | Express: `dist/client/` + `/api/*` |
-| `:3100` | Express under `node --watch` | — |
+| `:3100` | Express under `tsx watch` | — |
 | Build | none | `vite build` |
 
 In dev, push and watch: client edits hot-reload, server edits restart Express in about a second (the client retries meanwhile), a `package.json` change re-installs. Call `deploy_data_app` again only to switch branch or revive a stopped container.
@@ -69,8 +69,8 @@ In dev mode the user can pick a part of the page in Keboola's app preview and as
 ```bash
 npm install
 # .env with KBC_URL, KBC_TOKEN, BRANCH_ID, WORKSPACE_ID — see references/storage-access.md
-PORT=3100 node --watch --env-file=.env server/index.ts   # terminal 1
-npm run dev                                            # terminal 2
+PORT=3100 npm run dev:api   # terminal 1
+npm run dev                 # terminal 2
 ```
 
 Open http://127.0.0.1:3000. HMR is wired for the Keboola ingress (`wss`, port 443), so locally reload the page by hand.
