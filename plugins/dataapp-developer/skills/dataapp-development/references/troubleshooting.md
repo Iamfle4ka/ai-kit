@@ -59,7 +59,7 @@
 
 **Cause:** `keboola-config/supervisord-dev/` runs the Node server under `node --watch`. Each push replaces the changed files by write-and-rename, and on Linux `node --watch` sees only the first replacement, so later server changes never load.
 
-**Fix:** Run it as `command=/app/node_modules/.bin/tsx watch server/index.ts` with `CHOKIDAR_USEPOLLING="1"` in `environment=`, and add `tsx` to `devDependencies`, as `templates/react-vite-app/` does. The change loads on that same push. See [python-js-apps.md](python-js-apps.md) §Keboola-hosted dev mode.
+**Fix:** Switch it to `tsx watch` with `CHOKIDAR_USEPOLLING="1"` and add `tsx` to `devDependencies`, as `templates/react-vite-app/keboola-config/supervisord-dev/services/api.conf` does. The change loads on that same push.
 
 ## Exit code 153
 

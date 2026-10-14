@@ -69,8 +69,8 @@ In dev mode the user can pick a part of the page in Keboola's app preview and as
 ```bash
 npm install
 # .env with KBC_URL, KBC_TOKEN, BRANCH_ID, WORKSPACE_ID — see references/storage-access.md
-PORT=3100 node --watch --env-file=.env server/index.ts   # terminal 1
-npm run dev                                            # terminal 2
+PORT=3100 npm run dev:api   # terminal 1
+npm run dev                 # terminal 2
 ```
 
 Open http://127.0.0.1:3000. HMR is wired for the Keboola ingress (`wss`, port 443), so locally reload the page by hand.
