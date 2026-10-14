@@ -75,7 +75,7 @@ Supervisord starts and supervises your app processes. Rules that catch people ou
 
 - Absolute `/app/...` paths only. Relative paths cause startup failures because supervisord's CWD is not what you think it is.
 - Python commands MUST be prefixed with `uv run` to pick up the `uv`-managed venv. A bare `python app.py` runs the wrong interpreter.
-- Node tools run as their binary (`/app/node_modules/.bin/vite`), not through `npx`. Stopping `npx` on the Node 20 image leaves its child running, so a restart fails with the port still taken.
+- Node tools run as their binary (`/app/node_modules/.bin/vite`), not through `npx`. Stopping `npx` leaves its child running (Node 20 and 24 images), so a restart fails with the port still taken.
 - A running dev container keeps the program of a renamed or deleted `supervisord-dev/` `.conf`. Rename a program inside its existing file, or `deploy_data_app(mode='dev')` after the push.
 - Never declare `[program:nginx]`. The base image manages nginx automatically; declaring it yourself causes a conflict and one of the two starts fails.
 
