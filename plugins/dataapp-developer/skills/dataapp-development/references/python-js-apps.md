@@ -71,10 +71,12 @@ proxy_request_buffering off;
 
 ## Supervisord
 
-Supervisord starts and supervises your app processes. Three rules that catch people out:
+Supervisord starts and supervises your app processes. Rules that catch people out:
 
 - Absolute `/app/...` paths only. Relative paths cause startup failures because supervisord's CWD is not what you think it is.
 - Python commands MUST be prefixed with `uv run` to pick up the `uv`-managed venv. A bare `python app.py` runs the wrong interpreter.
+- Node tools run as their binary (`/app/node_modules/.bin/vite`), not through `npx`. Stopping `npx` on the Node 20 image leaves its child running, so a restart fails with the port still taken.
+- A running dev container keeps the program of a renamed or deleted `supervisord-dev/` `.conf`. Rename a program inside its existing file, or `deploy_data_app(mode='dev')` after the push.
 - Never declare `[program:nginx]`. The base image manages nginx automatically; declaring it yourself causes a conflict and one of the two starts fails.
 
 Sample `keboola-config/supervisord/services/app.conf` for Python via uv:
@@ -194,7 +196,7 @@ The template ships it. An existing Vite app without it gets it in the first chan
 2. In `vite.config.ts`, `import { kaiPreview } from '@keboola/vite-plugin-kai-preview'` and add `kaiPreview()` to `plugins`. An app that renders into an element other than `#root` passes it: `kaiPreview({ mount: '#app' })`.
 3. Remove what it replaces, or the preview hears two signals: an inline plugin that injects an error/healthy script (older apps call it `kaiPreviewErrorHandler`), and copied `preview-signal.js`, `preview-picker.js` or `preview-source.js` with the plugins that load them.
 4. Keep the app's error boundary. It still sets `window.__kaiPreviewCrashed` and calls `window.__kaiNotifyError`; type those with the package's `KaiPreviewWindow`.
-5. Type-check and push. The running dev container installs the package and restarts its `app` program, so Vite must run as `[program:app]` in `keboola-config/supervisord-dev/`. An app that still has `[program:vite]` renames it to `app` in the same push, then redeploys: the running container starts `app` but leaves `vite` holding port 3000, so the new Vite fails with `Port 3000 is already in use` while the old one keeps serving. `deploy_data_app(mode='dev')` right after the push, then check the preview for the pick button.
+5. Type-check and push. The running dev container installs the package and restarts its `app` program, so Vite must run as `[program:app]` in `keboola-config/supervisord-dev/`, started as in §Supervisord. An app on `[program:vite]` renames the section inside its existing `.conf` and swaps `npx vite` for the binary. If it ran `npx vite`, it then runs `deploy_data_app(mode='dev')` once: the stopped `npx` left Vite on port 3000. Check the preview for the pick button.
 6. Keep it out of the conversation: the user asked for their change, not this. No progress line about it, no mention in the reply — unless a step fails and holds up their change; then say so in one line.
 
 An app on an older release updates it the same way: `npm install --save-dev @keboola/vite-plugin-kai-preview@^<version>`, then steps 5 and 6.
