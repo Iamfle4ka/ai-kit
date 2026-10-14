@@ -1,6 +1,6 @@
 ---
 name: devdocs-rework
-description: "Use when reworking a section that was mechanically migrated from developers.keboola.com — the extend/ tree, Generic Extractor, Generic Writer, storage/api, or any page whose frontmatter carries a /extend/ or /integrate/ redirect_from. These trees are reference-dominant, arrived as 1:1 ports with no house process run on them, and carry three defects a native section never has: sibling families that should be one page, cookbooks buried inside reference pages, and kramdown-era anchors that no longer match what Starlight renders. Extends section-rework, which owns everything else."
+description: "Use when reworking a section ported from developers.keboola.com (extend/, Generic Extractor, Generic Writer, storage/api, pages with an /extend/ or /integrate/ redirect_from): merging sibling families, pulling cookbooks out of reference pages, keeping kramdown-era anchors. Extends section-rework."
 ---
 
 # Dev-docs rework — what a 1:1 port needs that a native section doesn't

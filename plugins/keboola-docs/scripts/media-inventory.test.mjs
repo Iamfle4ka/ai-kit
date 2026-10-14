@@ -42,3 +42,46 @@ test('unreferenced media under public/ is listed site-wide even when one page is
   assert.deepEqual(out.pages[0].media, []);
   assert.deepEqual(out.unreferenced, ['guide/orphan.png']);
 });
+
+const page = (dir) => path.join(dir, 'src', 'content', 'docs', 'guide', 'clean-howto.md');
+const addBeforeNext = (dir, snippet) => { const p = page(dir); fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace('**Next:**', `${snippet}\n\n**Next:**`)); };
+
+test('a relative <img> keeps its public/ file alive; a colocated image does not keep a public copy alive', () => {
+  const dir = repo();
+  fs.mkdirSync(path.join(dir, 'public', 'guide', 'clean-howto'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'public', 'guide', 'clean-howto', 'raw.png'), '');
+  fs.writeFileSync(path.join(dir, 'src', 'content', 'docs', 'guide', 'near.png'), '');
+  fs.writeFileSync(path.join(dir, 'public', 'guide', 'near.png'), '');          // a stale public twin of the colocated one
+  addBeforeNext(dir, '<img src="raw.png" alt="raw">\n\n![near](near.png)');
+  const { out } = run(dir, 'src/content/docs/guide/clean-howto.md');
+  const m = Object.fromEntries(out.pages[0].media.map((x) => [x.raw, x]));
+  assert.equal(m['raw.png'].via, 'public');
+  assert.equal(m['raw.png'].resolved, 'public/guide/clean-howto/raw.png');
+  assert.equal(m['near.png'].via, 'colocated');
+  assert.ok(!out.unreferenced.includes('guide/clean-howto/raw.png'));
+  assert.ok(out.unreferenced.includes('guide/near.png'), 'the public copy of a colocated image is an orphan');
+});
+
+test('--dist: a public file used only by built HTML counts as referenced', () => {
+  const dir = repo();
+  fs.writeFileSync(path.join(dir, 'public', 'guide', 'only-in-html.png'), '');
+  fs.mkdirSync(path.join(dir, 'dist', 'guide', 'clean-howto'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'dist', 'guide', 'clean-howto', 'index.html'), '<p><img src="../only-in-html.png"></p>');
+  const before = run(dir).out;
+  assert.ok(before.unreferenced.includes('guide/only-in-html.png'), 'page sources alone miss it');
+  const after = run(dir, '--dist').out;
+  assert.equal(after.unreferencedFrom, 'dist');
+  assert.ok(!after.unreferenced.includes('guide/only-in-html.png'));
+  assert.ok(after.unreferenced.includes('guide/orphan.png'));
+});
+
+test('--index reads what is staged, not the working tree', () => {
+  const dir = repo();
+  const g = (...a) => spawnSync('git', a, { cwd: dir, encoding: 'utf8', env: { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' } });
+  g('init', '-q'); g('add', '-A'); g('commit', '-q', '-m', 'base');
+  addBeforeNext(dir, '![late](/guide/orphan.png)');                            // unstaged edit
+  assert.ok(!run(dir).out.unreferenced.includes('guide/orphan.png'), 'the working tree sees the new ref');
+  const idx = run(dir, '--index').out;
+  assert.equal(idx.source, 'index');
+  assert.ok(idx.unreferenced.includes('guide/orphan.png'), 'the index does not');
+});

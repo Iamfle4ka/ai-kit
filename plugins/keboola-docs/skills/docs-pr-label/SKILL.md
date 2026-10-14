@@ -1,6 +1,6 @@
 ---
 name: docs-pr-label
-description: "Use after opening or updating a pull request in keboola/connection-docs, or when asked to label PRs. Gives the PR the labels its work belongs under (getting-started for PRDCT-487, apps-ga for PRDCT-692 / AJDA-3380, site-tooling when it touches build, scripts or runtime code) from the PR's ticket and changed files. A PostToolUse hook runs it after every `gh pr create`; run it by hand after pushes that move a PR into another section."
+description: "Use after opening or updating a keboola/connection-docs pull request, or when asked to label PRs: adds the section and site-tooling labels that its ticket and changed files call for. A hook runs it after every gh pr create."
 ---
 
 # Label a docs PR

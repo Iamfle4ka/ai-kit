@@ -1,6 +1,6 @@
 ---
 name: checker
-description: Independent checker of finished work. Use proactively before telling the author that any clip, GIF, screenshot set or docs-page change is done. Reads the user's own words from the session transcript (not the main agent's summary), checks every request and standing rule against what was delivered, measures clips (duration, size, brightness, caption size) and reads them frame by frame, and tests whether reader-facing prose is concrete. Returns PASS or FIX with ranked findings. Read-only.
+description: "Independent read-only checker of finished clips, GIFs, screenshots and docs-page changes. Use before reporting such work as done: it reads the user's own words from the transcript, checks every request and standing rule, measures clips and reads them frame by frame, and returns PASS or FIX."
 model: opus
 tools: Read, Grep, Glob, Bash
 ---

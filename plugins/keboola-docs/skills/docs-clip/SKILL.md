@@ -1,6 +1,6 @@
 ---
 name: docs-clip
-description: "Use when a docs page needs a short screen clip of the Keboola product — recording a flow in project 264, post-producing it with spotlights and caption chips (never a mascot), encoding it to a budgeted MP4 with a poster, and placing it under public/<section>/. Also for re-rendering an existing clip, exporting a GIF for Slack or a PR, or deciding whether a clip is warranted at all. Triggers on \"запиши гифку/клип\", \"переснять клип\", \"record a demo\", \"clip for the page\", \"show this in motion\"."
+description: "Use when a help.keboola.com page needs motion: choosing the form (states GIF, narrated recording with a caption band, Remotion explainer), recording in Keboola, encoding a budgeted MP4 or GIF, re-rendering a clip, or a GIF for Slack or a PR. Triggers: \"запиши гифку/клип\", \"переснять клип\", \"record a demo\"."
 ---
 
 # Clips for the Keboola docs

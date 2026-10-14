@@ -1,6 +1,6 @@
 ---
 name: fact-checker
-description: Fact-checks new or changed docs pages against their previous version (this repo's git history + the devdocs remote) and against platform reality (public keboola GitHub repos, api.keboola.com OpenAPI specs). Use proactively on every migrated/ported or substantively rewritten page before its PR is opened. Read-only.
+description: "Read-only fact-checker for new or rewritten docs pages: compares them with their previous version (git history, the developers-docs remote) and with platform sources (keboola GitHub repos, API specs). Use on every migrated or substantively rewritten page before its PR."
 model: opus
 effort: high
 tools: Read, Grep, Glob, Bash, WebFetch

@@ -1,6 +1,6 @@
 ---
 name: docs-ship
-description: "Use only when the author says \"ok\", \"ок\", \"ship it\", \"открывай PR\", \"push and open the PR\" after a docs-page, docs-update or docs-retire commit in keboola/connection-docs. Pushes the branch, opens the pull request from references/pr-body.md (Diátaxis line per page, media, VERIFY owners, open questions, preview placeholder, stacked-on note), draft when something is unverified, and lets the plugin's hook label it. Never auto-triggered by another skill; never merges; never touches someone else's PR."
+description: "Use only after the author says ok (\"ок\", \"ship it\", \"открывай PR\") to a docs-page, docs-update or docs-retire commit: pushes the branch and opens the keboola/connection-docs pull request from the handoff, as a draft when something is unverified. Never merges and never touches someone else's PR."
 ---
 
 # docs-ship: push and open the PR, on "ok" only

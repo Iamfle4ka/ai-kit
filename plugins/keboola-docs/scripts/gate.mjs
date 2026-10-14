@@ -9,11 +9,14 @@
 //   4. docs-link-redirect-check, only when dist/ and scripts/convert-nav.mjs exist (never blocks on a missing build)
 // Deny = JSON permissionDecision on stdout. WARN tier never blocks.
 // Escape hatch: DOCS_GATE=skip (env or as a prefix of the command). DOCS_GATE=strict turns child timeouts into FAIL.
-// Reads the working tree, not the index: unstaged edits on a staged page are what get checked.
+// Judges what the commit will record: staged blobs (git index), not the working tree. `git commit -a`
+// stages tracked changes at commit time, so for -a/--all the gate reads the working tree instead.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { makeSource } from './lib/source.mjs';
+import { pageRefs } from './lib/media-refs.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DIATAXIS = path.join(HERE, '..', 'skills', 'docs-diataxis-check', 'scripts', 'check.mjs');
@@ -45,7 +48,11 @@ const root = top.stdout.trim();
 if (!fs.existsSync(path.join(root, 'src', 'content', 'docs')) || !fs.existsSync(path.join(root, '_data', 'navigation.yml'))) process.exit(0);
 
 // ---- staged set --------------------------------------------------------------------------------
-const diff = git(['diff', '--cached', '--name-status', '-M', '--', 'src/content/docs', 'public']);
+// `git commit -a` / `--all` / `-am` commits tracked working-tree changes too.
+const commitArgs = cmd.slice(m.index + m[0].length).split(/[;&|]/)[0];
+const ALL = /(?:^|\s)(?:--all|-[A-Za-z]*a[A-Za-z]*)(?=\s|$)/.test(commitArgs);
+const diff = git(['diff', ALL ? 'HEAD' : '--cached', '--name-status', '-M', '--', 'src/content/docs', 'public']);
+const src = makeSource(root, { index: !ALL, prefixes: ['src/content/docs', '_data', 'public'] });
 if (diff.status !== 0) process.exit(0);
 const isPage = (f) => /\.(md|mdx)$/.test(f) && f.startsWith('src/content/docs/');
 const pages = [], retired = [], deletedMedia = [];
@@ -67,9 +74,9 @@ const run = (file, args, extra = {}) => {
 const timeout = (what) => (mode === 'strict' ? fails : warns).push(`${what} timed out after ${CHILD_MS / 1000} s${mode === 'strict' ? '' : ' (DOCS_GATE=strict to fail on this)'}`);
 
 // ---- 1. Diátaxis on staged pages ----------------------------------------------------------------
-const existing = pages.filter((p) => fs.existsSync(path.join(root, p)));
+const existing = pages.filter((p) => src.exists(path.join(root, p)));
 if (existing.length) {
-  const args = ['--root', root, '--json', ...(fs.existsSync(path.join(root, 'dist')) ? ['--dist'] : []), ...existing];
+  const args = ['--root', root, '--json', ...(ALL ? [] : ['--index']), ...(fs.existsSync(path.join(root, 'dist')) ? ['--dist'] : []), ...existing];
   const r = run(DIATAXIS, args);
   if (r.timedOut) timeout('diataxis check');
   else {
@@ -89,10 +96,10 @@ const slugOf = (f) => '/' + f.replace(/^src\/content\/docs\//, '').replace(/\.(m
 const baseRef = ['keboola/main', 'origin/main', 'main'].find((r) => git(['rev-parse', '-q', '--verify', r]).status === 0);
 if (baseRef) for (let i = retired.length - 1; i >= 0; i--) if (git(['cat-file', '-e', `${baseRef}:${retired[i]}`]).status !== 0) retired.splice(i, 1);
 if (retired.length) {
-  const grep = git(['grep', '-l', '-E', 'redirect_from', '--', 'src/content/docs']);
   const claimed = new Set();
-  for (const f of grep.stdout.split('\n').filter(Boolean)) {
-    const text = fs.readFileSync(path.join(root, f), 'utf8');
+  for (const abs of src.list(path.join(root, 'src', 'content', 'docs'), (f) => /\.(md|mdx)$/.test(f))) {
+    const text = src.read(abs);
+    if (!text.includes('redirect_from')) continue;
     const fm = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
     if (!fm) continue;
     for (const u of fm[1].match(/\/[A-Za-z0-9_./-]*\/?/g) ?? []) claimed.add(u.replace(/\/?$/, '/'));
@@ -105,19 +112,23 @@ if (retired.length) {
 
 // ---- 3. media deleted while still referenced ----------------------------------------------------
 if (deletedMedia.length && fs.existsSync(INVENTORY)) {
-  const r = run(INVENTORY, ['--root', root, '--json']);
+  const r = run(INVENTORY, ['--root', root, '--json', ...(ALL ? [] : ['--index'])]);
   if (r.timedOut) timeout('media inventory');
   else {
     let j = null; try { j = JSON.parse(r.stdout); } catch { /* fall through */ }
     if (j) {
       const refs = new Map();
-      for (const p of j.pages ?? []) for (const m of p.media ?? []) { const k = m.path.replace(/^\//, ''); if (!refs.has(k)) refs.set(k, []); refs.get(k).push(p.page); }
-      for (const f of deletedMedia) { const k = f.replace(/^public\//, ''); const by = refs.get(k); if (by?.length) fails.push(`${f} deleted, but still referenced by ${by.join(', ')}`); }
+      for (const p of j.pages ?? []) for (const m of p.media ?? []) { if (!refs.has(m.resolved)) refs.set(m.resolved, []); refs.get(m.resolved).push(p.page); }
+      for (const f of deletedMedia) { const by = refs.get(f); if (by?.length) fails.push(`${f} deleted, but still referenced by ${[...new Set(by)].join(', ')}`); }
       // Only media this commit orphans: files the staged pages referenced before (HEAD) and nobody references now.
       const before = new Set();
-      for (const pg of pages) { const prev = git(['show', `HEAD:${pg}`]); if (prev.status !== 0) continue; for (const m of prev.stdout.matchAll(/!\[[^\]]*\]\((\/[^)\s]+)|\b(?:src|poster)=["'](\/[^"']+)["']/g)) before.add((m[1] ?? m[2]).split(/[?#]/)[0].replace(/^\//, '')); }
-      const unref = new Set(j.unreferenced ?? []);
-      for (const o of before) if (unref.has(o) && !deletedMedia.includes('public/' + o)) warns.push(`public/${o} is referenced by no page any more (this commit dropped the last reference; delete it or keep it on purpose)`);
+      for (const pg of pages) {
+        const prev = git(['show', `HEAD:${pg}`]); if (prev.status !== 0) continue;
+        const abs = path.join(root, pg);
+        for (const r of pageRefs(abs, prev.stdout, { root, exists: src.exists, docsDir: path.join(root, 'src', 'content', 'docs') }).refs) if (r.resolved.startsWith('public/')) before.add(r.resolved);
+      }
+      const unref = new Set((j.unreferenced ?? []).map((u) => 'public/' + u));
+      for (const o of before) if (unref.has(o) && !deletedMedia.includes(o)) warns.push(`${o} is referenced by no page any more (this commit dropped the last reference; delete it or keep it on purpose)`);
     }
   }
 }

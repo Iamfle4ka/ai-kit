@@ -88,6 +88,12 @@ being handed off, where the FAIL rules cost minutes to meet.
 - 2026-10-14: D16 added with the keboola-docs plugin. A `TEMPLATE:` leftover is the one way a
   skeleton reaches readers; the gate refuses the commit. Fixture: `template-left.md`.
 - 2026-10-13, Nikita: connector catalogs are exempt from D5 and D12; their nav order is alphabetical, not a reading order (writers pass, dbt trigger in #1190).
+- 2026-10-14: marker format for agents. The site build (`page-markdown.mjs`, branch
+  `agents-llms-twins`) copies the type and date into each page's markdown twin and `llms.txt`
+  entry. It reads only `<Type>-type page` or `<Type>-hub page` (`Overview-hub` counts as
+  explanation) and `verified … YYYY-MM-DD` in the same comment, and skips `VERIFY`/`TODO`
+  comments. A looser form such as `<!-- How-to page -->` still passes D2 here but reaches agents
+  without a type, so write the full form: `<!-- How-to-type page. Source: … Verified 2026-10-14. -->`.
 
 ### Open
 
@@ -96,7 +102,8 @@ being handed off, where the FAIL rules cost minutes to meet.
 - D6 lower bound: a 36-line leaf (`data-apps/publish-and-share.md`) reads fine. Keep the WARN, or
   exempt leaf pages with a `Next`?
 - D2 on `.md` pages: the build strips comments now (`strip-comments.mjs`), so a marker costs the
-  reader nothing. Should new pages get one by default?
+  reader nothing. Should new pages get one by default? Once `agents-llms-twins` merges, the marker is also what
+  tells agents the page type in `llms.txt`, which argues for yes.
 
 ## Adding a rule
 

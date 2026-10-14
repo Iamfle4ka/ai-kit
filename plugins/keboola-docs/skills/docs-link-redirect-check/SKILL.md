@@ -1,6 +1,6 @@
 ---
 name: docs-link-redirect-check
-description: "Use after rewriting, merging, moving or deleting pages in keboola/connection-docs (help.keboola.com, Astro + Starlight) and before pushing or asking for review — verifies that every retired URL redirects to a real page (no chains, no dead stubs), that changed pages have no broken links, anchors or media, that nothing in src/ or the nav still points at a retired slug, and optionally that the Vercel preview serves the same. Triggers on \"проверь ссылки/редиректы\", \"битые ссылки\", \"link check\", \"redirects after the rewrite\", or any page move/merge/delete."
+description: "Use after rewriting, merging, moving or deleting help.keboola.com pages and before review: checks that retired URLs redirect to real pages without chains, changed pages have no broken links, anchors or media, and nothing still points at a retired slug. Triggers: \"проверь ссылки/редиректы\", \"битые ссылки\", \"link check\"."
 ---
 
 # Link & redirect check after a rewrite

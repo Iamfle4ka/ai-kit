@@ -15,6 +15,7 @@
 // It never touches dist/. Run docs-link-redirect-check afterwards; the commit gate checks the redirect.
 import fs from 'node:fs';
 import path from 'node:path';
+import { pageRefs } from './lib/media-refs.mjs';
 
 const args = process.argv.slice(2);
 const flagVal = (n) => { const i = args.indexOf(n); return i >= 0 ? (args[i + 1] ?? null) : null; };
@@ -102,14 +103,18 @@ if (fs.existsSync(NAV)) {
 }
 
 // ---- orphan media ---------------------------------------------------------------------------------------
-const mediaRefs = (text) => { const out = new Set(); for (const m of text.matchAll(/!\[[^\]]*\]\((\/[^)\s]+)/g)) out.add(m[1].split(/[?#]/)[0]); for (const m of text.matchAll(/\b(?:src|poster)=["'](\/[^"']+)["']/g)) out.add(m[1].split(/[?#]/)[0]); return out; };
-const fromMedia = mediaRefs(fromText);
+const refCtx = { root: ROOT, exists: (f) => fs.existsSync(f), docsDir: DOCS };
+const publicRefs = (file, text) => new Set(pageRefs(file, text, refCtx).refs.filter((r) => r.resolved.startsWith('public/')).map((r) => r.resolved));
+const fromMedia = publicRefs(fromFile, fromText);
 if (fromMedia.size) {
   const others = new Set();
-  for (const f of walkPages(DOCS)) { if (f === fromFile) continue; for (const m of mediaRefs(writes.get(f) ?? read(f))) others.add(m); }
-  if (MERGE && targetText) for (const m of mediaRefs(targetText)) others.add(m);
-  for (const m of fromMedia) if (!others.has(m)) { const p = path.join(ROOT, 'public', m.replace(/^\//, '')); if (fs.existsSync(p)) { result.orphanMedia.push('public/' + m.replace(/^\//, '')); if (DEL_ORPHANS) deletes.add(p); } }
+  for (const f of walkPages(DOCS)) { if (f === fromFile) continue; for (const m of publicRefs(f, writes.get(f) ?? read(f))) others.add(m); }
+  if (MERGE && targetText) for (const m of publicRefs(targetFile, targetText)) others.add(m);
+  for (const m of fromMedia) if (!others.has(m)) { const p = path.join(ROOT, m); if (fs.existsSync(p)) { result.orphanMedia.push(m); if (DEL_ORPHANS) deletes.add(p); } }
 }
+// Relative refs resolve against the page's folder and URL: a merge or a rename moves the text, so they can break.
+result.relativeRefs = [];
+if (MERGE || RENAME) for (const r of pageRefs(fromFile, fromText, refCtx).refs) if (!r.raw.startsWith('/')) result.relativeRefs.push(`${r.raw} (${r.via}: ${r.resolved})`);
 function walkPages(d, out = []) { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walkPages(p, out); else if (/\.(md|mdx)$/.test(e.name)) out.push(p); } return out; }
 
 // ---- apply ---------------------------------------------------------------------------------------------------
@@ -125,6 +130,7 @@ else {
   console.log(`  nav: ${result.navChanged ? (RENAME ? 'url re-pointed' : 'entry removed') : 'no entry found (check _data/navigation.yml by hand)'}`);
   for (const l of result.linksRewritten) console.log(`  links: ${l.file} (${l.count})`);
   for (const d of result.deleted) console.log(`  ${DEL_ORPHANS && d.startsWith('public/') ? 'deleted media' : 'deleted'}: ${d}`);
+  if (result.relativeRefs.length) console.log(`  relative media refs move with the text, check them on the target: ${result.relativeRefs.join(', ')}`);
   if (result.orphanMedia.length && !DEL_ORPHANS) console.log(`  media only this page used (delete if nothing keeps it): ${result.orphanMedia.join(', ')}`);
   console.log(`next: ${MERGE ? 'fold the TEMPLATE: block into ' + result.targetFile + ', then ' : ''}npm run build && docs-link-redirect-check --base keboola/main`);
 }

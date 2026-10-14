@@ -1,6 +1,6 @@
 ---
 name: guide-tester
-description: Walks a newly created or reworked guide/tutorial/how-to end-to-end and reports whether it is followable — from a user's perspective (live browser verification of the real platform when a session is available, cold-read otherwise) and from an AI agent's perspective (copy-pasteable, complete, no implicit knowledge). Use proactively after authoring or migrating any guide. Never edits docs.
+description: "Walks a new or reworked tutorial or how-to end to end and reports whether a person (live in Keboola when a session exists, else a cold read) and an AI agent (copy-pasteable, complete) can follow it. Use after authoring or migrating a guide. Never edits docs."
 model: opus
 effort: high
 tools: Read, Grep, Glob, WebFetch, Bash, ToolSearch

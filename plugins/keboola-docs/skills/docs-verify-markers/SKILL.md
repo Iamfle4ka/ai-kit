@@ -1,6 +1,6 @@
 ---
 name: docs-verify-markers
-description: "Use when a Keboola docs page (keboola/connection-docs, help.keboola.com) states something you could not check live, when a page or diff contains VERIFY(<name>) markers or other authors' comments, when asked whether to delete such comments before a PR, or when \"View as Markdown\", llms.txt or page source shows internal notes to readers."
+description: "Use when a keboola/connection-docs page states something not checked live, when a page or diff carries VERIFY(<owner>) or TODO markers, when deciding whether to delete such comments before a PR, or when internal notes reach readers (View as Markdown, llms.txt). Applying an owner's answer to the page is docs-update."
 ---
 
 # VERIFY markers in the docs

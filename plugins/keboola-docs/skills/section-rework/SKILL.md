@@ -1,6 +1,6 @@
 ---
 name: section-rework
-description: "Use when reworking, restructuring, or rewriting a help-docs section into Diátaxis shape — splitting a \"frankenstein\" page that mixes explanation + steps + reference, turning a thin link-directory overview into a real one, or shaping a just-migrated section (MCP, Storage, Flows, Transformations, Getting Started) into tutorial / how-to / reference / explanation pages with a reading order. Owns page SHAPE (placement/dedup is migration-placement). Classifies and proposes a before/after page map, stops for the owner's OK, then splits, reshapes, fixes nav, and verifies."
+description: "Use when restructuring a help-docs section into Diátaxis shape: splitting frankenstein pages, turning a link-list overview into a real one, or shaping a migrated section into tutorial, how-to, reference and explanation pages with a reading order. Stops for OK on a page map. Where a section lives in the nav: migration-placement."
 ---
 
 # Section Rework — one page, one Diátaxis type

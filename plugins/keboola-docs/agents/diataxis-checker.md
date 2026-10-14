@@ -1,6 +1,6 @@
 ---
 name: diataxis-checker
-description: Read-only judge of a docs page's Diátaxis type and shape for keboola/connection-docs. Use after scripts/check.mjs from the docs-diataxis-check skill has run, on the exact pages it reported, to decide whether each page is one type, whether its lede and overview carry weight, and whether the title speaks the reader's words. Returns PASS or FIX per page with rule ids and line numbers; type findings are evidence, never a split order.
+description: "Read-only judge of a keboola/connection-docs page's Diátaxis type and shape. Use after the docs-diataxis-check script, on the pages it reported: one type or not, lede and overview weight, the reader's words in the title. Returns PASS or FIX per page with rule ids; type findings are evidence."
 model: opus
 tools: Read, Grep, Glob, Bash
 ---

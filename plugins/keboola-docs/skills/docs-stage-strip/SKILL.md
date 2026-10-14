@@ -1,6 +1,6 @@
 ---
 name: docs-stage-strip
-description: "Use when a Keboola docs page (keboola/connection-docs, help.keboola.com) should show the stages a reader goes through as numbered dots on a line, the Getting Started look, or needs a UI screenshot of the screen a stage ends on. Covers deciding whether a page earns a strip, writing the stages from the page itself, the StageStrip component, placement, the markdown twin, a masked UI-locator screenshot, and the checks. Triggers on \"полоса этапов\", \"полоса с точками\", \"визуализация этапов\", \"картинка процесса\", \"stage strip\", \"line with dots\", \"show the steps as dots\". A moving explainer on an overview hub is docs-clip's job, not this one."
+description: "Use when a help.keboola.com how-to should show its 3 to 6 stages as numbered dots on a line (the StageStrip component, the Getting Started look), with a UI-locator screenshot of the screen a stage ends on. Triggers: \"полоса этапов\", \"полоса с точками\", \"stage strip\". Moving hub explainers belong to docs-clip."
 ---
 
 # Stage strips for the Keboola docs

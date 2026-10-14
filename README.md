@@ -125,7 +125,7 @@ Write, update, retire and ship pages on help.keboola.com (keboola/connection-doc
 **Features:**
 - 📝 **Page lifecycle**: `docs-page` (new page from a PRDCT id or a phrase, six templates), `docs-update`, `docs-retire` (redirects, nav, inbound links), `docs-ship` (PR only on "ok")
 - ✅ **Checks**: Diátaxis rules D1–D16 (script + judge agent), links and redirects, VERIFY markers, fact-checker and guide-tester agents
-- 🎬 **Media**: UI screenshots from your own Chrome over CDP, states GIFs with click rings, Remotion compositions for narrated clips and explainers
+- 🎬 **Media**: UI screenshots from your own Chrome over CDP, states GIFs with click rings, Remotion compositions for narrated clips and explainers, and `docs-visuals`, a catalog of the page elements the Apps and Getting Started sections use
 - 🚦 **Commit gate**: a hook that blocks commits with FAIL-tier findings, plus sidebar regeneration and PR labels
 
 **[→ View Keboola Docs Plugin Documentation](./plugins/keboola-docs/README.md)**

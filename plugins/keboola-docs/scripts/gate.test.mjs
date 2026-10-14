@@ -132,3 +132,28 @@ test('dropping a page that never reached the base branch needs no redirect', () 
   git(dir, 'rm', '-q', 'src/content/docs/guide/no-desc.md');   // this one IS on main
   assert.match(denied(gate(dir, 'git commit -m x')) ?? '', /no-desc/);
 });
+
+test('the gate judges the staged blob: an unstaged fix does not save a broken staged page, and an unstaged break does not block a good one', () => {
+  const dir = repo();
+  const p = PAGE(dir, 'clean-howto.md');
+  const good = fs.readFileSync(p, 'utf8');
+  const broken = good.replace(/^Practical recipes.*$/m, '## Heading first');
+  fs.writeFileSync(p, broken); git(dir, 'add', '-A');           // staged: broken
+  fs.writeFileSync(p, good);                                       // working tree: fixed, not staged
+  assert.match(denied(gate(dir, 'git commit -m x')) ?? '', /D3/);
+  git(dir, 'add', '-A');                                           // staged: good
+  fs.writeFileSync(p, broken);                                     // working tree: broken, not staged
+  assert.equal(denied(gate(dir, 'git commit -m x')), null);
+  assert.match(denied(gate(dir, 'git commit -am x')) ?? '', /D3/, 'commit -a takes the working tree');
+});
+
+test('deleting a public image that a page reaches only through a relative <img> is denied', () => {
+  const dir = repo();
+  fs.mkdirSync(path.join(dir, 'public', 'guide', 'clean-howto'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'public', 'guide', 'clean-howto', 'raw.png'), '');
+  const p = PAGE(dir, 'clean-howto.md');
+  fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace('**Next:**', '<img src="raw.png" alt="raw">\n\n**Next:**'));
+  git(dir, 'add', '-A'); git(dir, 'commit', '-q', '-m', 'relative img');
+  git(dir, 'rm', '-q', 'public/guide/clean-howto/raw.png');
+  assert.match(denied(gate(dir, 'git commit -m x')) ?? '', /public\/guide\/clean-howto\/raw\.png deleted, but still referenced/);
+});

@@ -1,6 +1,6 @@
 ---
 name: migration-placement
-description: "Use when migrating a dev-docs (developers.keboola.com) section into the help docs, or when auditing an already-open migration PR for placement/duplication. Finds the CORRECT home in the help information architecture by MEANING (not the first name-matching spot), eliminates duplication with existing pages, and proposes regrouping when related topics are scattered or a cross-cutting topic sits under the wrong parent. Applies unambiguous single-page fixes; surfaces placement and regroup decisions to the owner."
+description: "Use when migrating a developers.keboola.com section into the help docs, or auditing a migration PR for placement: finds the home by meaning, removes duplicates, proposes regrouping, applies single-page fixes and leaves placement calls to the owner."
 ---
 
 # Migration Placement — right home, no duplicates

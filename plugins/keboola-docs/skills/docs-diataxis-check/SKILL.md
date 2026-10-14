@@ -1,6 +1,6 @@
 ---
 name: docs-diataxis-check
-description: "Use before handing off any page of keboola/connection-docs (help.keboola.com): after a rework, a rewrite, a split or a new page, and whenever someone asks whether a page is one Diátaxis type, has the house page shape (lede, type marker, Next footer, Goal/Result recipes, length band), or carries VERIFY markers that reach readers. Triggers on \"проверь страницу по диатаксису\", \"проверь по правилам\", \"diátaxis check\", \"is this one type\", \"frankenstein page\", \"check the page shape\"."
+description: "Use before handing off a keboola/connection-docs page, or when asked whether a page is one Diátaxis type with the house shape (lede, type marker, Next, Goal/Result, length) and no leaking VERIFY markers. Runs the rule script, then the diataxis-checker agent. Triggers: \"проверь по диатаксису\", \"diátaxis check\", \"frankenstein page\"."
 ---
 
 # Diátaxis page check

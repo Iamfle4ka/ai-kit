@@ -3,7 +3,7 @@
 //
 // Run from the repo root (a worktree is fine):
 //   node <plugin>/skills/docs-diataxis-check/scripts/check.mjs [pages...] [--base <ref>] [--paths <prefix>]
-//        [--dist] [--json] [--root <dir>]
+//        [--dist] [--json] [--root <dir>] [--index]
 //
 // Page selection: explicit paths, or --base (pages changed since the merge-base with <ref>, plus the
 // working tree), or --paths (every page under a prefix). The rules are numbered D1..D12 and listed
@@ -14,6 +14,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
+import { makeSource } from '../../../scripts/lib/source.mjs';
 
 const args = process.argv.slice(2);
 const flagVal = (n) => { const i = args.indexOf(n); return i >= 0 ? (args[i + 1] ?? null) : null; };
@@ -26,14 +27,16 @@ const JSON_OUT = has('--json');
 const WANT_DIST = has('--dist');
 const BASE = flagVal('--base');
 const PATHS = flagVal('--paths');
+// --index: read pages and the nav from the git index (what the next commit records); the commit gate uses it.
+const SRC = makeSource(ROOT, { index: has('--index') });
 
 const usage = (m) => { console.error(`✗ ${m}`); process.exit(2); };
-if (!fs.existsSync(DOCS)) usage(`src/content/docs not found under ${ROOT}: run from the repo root or pass --root`);
+if (!SRC.exists(DOCS)) usage(`src/content/docs not found under ${ROOT}: run from the repo root or pass --root`);
 const sh = (cmd) => { try { return execSync(cmd, { cwd: ROOT, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim(); } catch { return ''; } };
 
 // ---- page selection -----------------------------------------------------------------------------
 const isPage = (f) => /\.(md|mdx)$/.test(f) && !f.includes('/dist/');
-const walk = (d, out = []) => { if (!fs.existsSync(d)) return out; for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) walk(p, out); else if (isPage(p)) out.push(p); } return out; };
+const walk = (d) => SRC.list(d, isPage);
 const selected = new Set();
 const skipFlagValues = new Set(['--root', '--base', '--paths']);
 for (let i = 0; i < args.length; i++) { const a = args[i]; if (a.startsWith('--')) { if (skipFlagValues.has(a)) i++; continue; } selected.add(path.resolve(ROOT, a)); }
@@ -43,7 +46,7 @@ if (BASE) {
   for (const l of lines) { const rel = l.trim(); if (rel && isPage(rel)) selected.add(path.join(ROOT, rel)); }
 }
 if (PATHS) for (const p of walk(path.resolve(ROOT, PATHS))) selected.add(p);
-const files = [...selected].filter((p) => fs.existsSync(p) && isPage(p)).sort();
+const files = [...selected].filter((p) => SRC.exists(p) && isPage(p)).sort();
 if (!files.length) usage('no pages selected: pass page paths, --base <ref> or --paths <prefix>');
 
 // ---- frontmatter + body helpers ------------------------------------------------------------------
@@ -72,7 +75,7 @@ const maskComments = (lines) => { let inC = false; return lines.map((l) => { let
 
 // ---- all pages (for Next resolution) -------------------------------------------------------------
 const pagesByUrl = new Map();
-for (const p of walk(DOCS)) pagesByUrl.set(pageUrlOf(p, fm(fs.readFileSync(p, 'utf8'))), p);
+for (const p of walk(DOCS)) pagesByUrl.set(pageUrlOf(p, fm(SRC.read(p))), p);
 
 // ---- nav: reading order per top-level section ----------------------------------------------------
 // Minimal indentation parser for _data/navigation.yml: `- url:` / `- title:` items, `items:` children.
@@ -96,7 +99,7 @@ function parseNav(text) {
   }
   return root;
 }
-const nav = fs.existsSync(NAV) ? parseNav(fs.readFileSync(NAV, 'utf8')) : { items: [] };
+const nav = SRC.exists(NAV) ? parseNav(SRC.read(NAV)) : { items: [] };
 const sequences = []; // [{ section, urls: [...] }]
 const groupIndex = new Map(); // nested group url → its own sequence
 // A sequence is a nav item with a url and children (a top-level section or a nested group);
@@ -125,7 +128,7 @@ export const CATALOG_PREFIXES = ['/components/extractors/', '/components/writers
 const inCatalog = (u) => CATALOG_PREFIXES.some((p) => u.startsWith(p));
 
 function checkPage(file) {
-  const text = fs.readFileSync(file, 'utf8');
+  const text = SRC.read(file);
   const rel = path.relative(ROOT, file).replace(/\\/g, '/');
   const f = fm(text);
   const url = pageUrlOf(file, f);

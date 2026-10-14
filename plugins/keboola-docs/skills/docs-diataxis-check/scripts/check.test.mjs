@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -291,4 +292,17 @@ test('D16: a TEMPLATE: leftover anywhere on the page is a FAIL with its line', (
   assert.equal(d16.length, 2);
   assert.deepEqual(d16.map((f) => f.line), [2, 13]);
   assert.ok(d16.every((f) => f.level === 'FAIL'));
+});
+
+test('--index reads the staged blob, not the working-tree file', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-index-'));
+  fs.cpSync(REPO, dir, { recursive: true });
+  const env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
+  const g = (...a) => spawnSync('git', a, { cwd: dir, env, encoding: 'utf8' });
+  g('init', '-q'); g('add', '-A'); g('commit', '-q', '-m', 'base');
+  const p = path.join(dir, page('clean-howto.md'));
+  fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace(/^Practical recipes.*$/m, '## Heading first'));   // unstaged: lede gone
+  const at = (...a) => JSON.parse(spawnSync(process.execPath, [SCRIPT, '--root', dir, '--json', ...a, page('clean-howto.md')], { encoding: 'utf8' }).stdout).pages[0];
+  assert.ok(ids(at(), 'FAIL').includes('D3'), 'the working tree has no lede');
+  assert.deepEqual(ids(at('--index'), 'FAIL'), [], 'the staged blob still has it');
 });

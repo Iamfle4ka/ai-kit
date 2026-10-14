@@ -1,6 +1,6 @@
 ---
 name: docs-retire
-description: "Use to delete, merge, move or rename a help.keboola.com page (keboola/connection-docs) so that every old URL still lands somewhere: picks the redirect target by meaning, adds redirect_from, removes or re-points the nav entry, rewrites inbound links, folds a merged body into the target, lists orphaned media, then verifies with docs-link-redirect-check. Triggers on \"удали страницу\", \"слей страницы\", \"объедини страницы\", \"перенеси страницу\", \"переименуй slug\", \"retire the page\", \"merge these pages\", \"move the page\", \"delete this page\", \"rename the url\". The commit gate refuses a deleted page with no redirect."
+description: "Use when deleting, merging, moving or renaming a help.keboola.com page so every old URL still lands: picks the redirect target, adds redirect_from, fixes the nav and inbound links, folds merged text, lists orphaned media. Triggers: \"удали страницу\", \"слей страницы\", \"перенеси страницу\", \"merge these pages\", \"move the page\"."
 ---
 
 # docs-retire: delete, merge, move or rename with redirects

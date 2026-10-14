@@ -1,6 +1,6 @@
 ---
 name: capturing-keboola-ui-screenshots
-description: "Use when a help.keboola.com page (Apps under src/content/docs/data-apps/, Getting Started, or any section) needs a real Keboola product-UI screenshot — Apps list, Create App, app config/Overview, Kai chat, deploy wizard, auth screens, Storage, Flows — and a placeholder or stale image must be replaced with a live capture. Also holds the capture gotchas (viewport, names, CSP, toast, Kai panel) that docs-clip and docs-stage-strip reuse."
+description: "Use when shooting a Keboola UI screenshot for a help.keboola.com page (Apps, Kai chat, Storage, Flows, deploy wizard): the capture rules (2x, 1100 px, no names, toast, CSP, Kai panel) and the CDP helper. Stale shots on an existing page start in docs-update, which calls this. Triggers: \"сними скриншот\", \"screenshot for the page\"."
 ---
 
 # Capturing Keboola UI screenshots for the Apps docs

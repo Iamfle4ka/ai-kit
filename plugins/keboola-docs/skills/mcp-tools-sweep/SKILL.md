@@ -1,6 +1,6 @@
 ---
 name: mcp-tools-sweep
-description: "Use when an alert, task spec, or review comment says the MCP docs page tool list is outdated, missing tools, or drifted from the MCP server (keboola/connection-docs ai/mcp-server vs keboola/mcp-server TOOLS.md), or when asked to sweep/reconcile/consolidate the MCP tools list. Also use to collapse several such drift alerts into one sweep."
+description: "Use when an alert, task or review says the MCP server docs page's tool list is outdated or has drifted from keboola/mcp-server TOOLS.md, or when asked to reconcile that list; collapses several drift alerts into one sweep."
 ---
 
 # MCP tools drift sweep

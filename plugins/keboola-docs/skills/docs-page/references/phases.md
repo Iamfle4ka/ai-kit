@@ -67,9 +67,12 @@ Stop with the proposal block. Record `stops.type_ok` with the timestamp of the a
   paragraph on its parent page.
 - Final pass: the humanizer skill on reader-facing prose.
 
-## Phase 4: media
+## Phase 4: visuals and media
 
-Decide from the page, not from habit:
+First the page elements: read `${CLAUDE_PLUGIN_ROOT}/skills/docs-visuals/references/catalog.md` and pick by what the reader
+needs (a task page gets the Before you start box and, with more than one way through, the Prompt /
+UI / CLI tabs; a "how it works" passage becomes a FlowStrip; 3 to 6 ordered stages a StageStrip; an
+end with several destinations a CardGrid). Then motion and screenshots. Decide from the page, not from habit:
 
 | Page type / place | Default | Earns more when… |
 |---|---|---|

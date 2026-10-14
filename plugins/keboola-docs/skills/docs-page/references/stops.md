@@ -15,6 +15,7 @@ in the Why column; links and paths in backticks. No ASCII alignment, no "→" ch
 | Slug | `data-apps/pause` | reader's words, singular, "app" not "data app" (D14) | `data-apps/pause-and-start` |
 | Nav | Apps › Run & share, after `operate/` | D12: reading order; `operate/` Next → here, here → `troubleshooting/` | before `operate/` |
 | Redirects | none | new page | |
+| Visuals | Before you start box, Prompt/UI/CLI tabs | task page with three ways through (`docs-visuals` catalog) | plain lists |
 | Media | states GIF under step 2 | Apps rule: a menu and what it opens; `clip-grammar.md` | none |
 
 Add a one-line **Finding** above the table when something changes the picture (a page that
@@ -29,7 +30,7 @@ author picks or types a correction in "Other". Three stops, three questions at m
 | Stop | Header | Options |
 |---|---|---|
 | 1 Type and map | "Page map" | Go with the map (Recommended) · Fold into `<existing page>` instead · Change the type · Change the place |
-| 2 Media | "Media" | `<proposed form>` (Recommended) · No media · A different form (states GIF / narrated recording / explainer) |
+| 2 Visuals | "Visuals" | `<proposed elements and media>` (Recommended) · Text only · A different element or form |
 | 3 Ship | "Ship" | Push and open the PR · Keep the commit local · Discard the branch |
 
 Without the tool (another host, a scripted run): the table, then one line "Reply ok, or name the
