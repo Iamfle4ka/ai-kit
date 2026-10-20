@@ -8,7 +8,8 @@
 - Supervisord (`uv run`, no `[program:nginx]`)
 - POST handling on /
 - Python dependencies (`uv sync`, no `pip install`)
-- Preferred shape for dashboarding: single Node + static frontend
+- Default shape: React + Vite + Express in one Node container
+- Keboola's app preview: `kaiPreview()` in every Vite app
 - Multi-server pattern (Python backend + JS frontend)
 - Local development
 - Keboola-hosted dev mode (`KBC_APP_MODE=dev`)
@@ -70,10 +71,12 @@ proxy_request_buffering off;
 
 ## Supervisord
 
-Supervisord starts and supervises your app processes. Three rules that catch people out:
+Supervisord starts and supervises your app processes. Rules that catch people out:
 
 - Absolute `/app/...` paths only. Relative paths cause startup failures because supervisord's CWD is not what you think it is.
 - Python commands MUST be prefixed with `uv run` to pick up the `uv`-managed venv. A bare `python app.py` runs the wrong interpreter.
+- Node tools run as their binary (`/app/node_modules/.bin/vite`), not through `npx`. Stopping `npx` leaves its child running (Node 20 and 24 images), so a restart fails with the port still taken.
+- A running dev container keeps the program of a renamed or deleted `supervisord-dev/` `.conf`. Rename a program inside its existing file, or `deploy_data_app(mode='dev')` after the push.
 - Never declare `[program:nginx]`. The base image manages nginx automatically; declaring it yourself causes a conflict and one of the two starts fails.
 
 Sample `keboola-config/supervisord/services/app.conf` for Python via uv:
@@ -169,66 +172,51 @@ build-backend = "setuptools.build_meta"
 
 If migrating from `requirements.txt`, move all deps into the `dependencies` array. Delete `requirements.txt` after the move so it doesn't bit-rot alongside `pyproject.toml`.
 
-## Preferred shape for dashboarding: single Node + static frontend
+## Default shape: React + Vite + Express in one Node container
 
-This is the dashboarding default. Express (or similar) on a single internal port (e.g. `:3000`) serving BOTH:
+Every new Python/JS app starts from `templates/react-vite-app/` — whichever agent builds it, so the next one (Kai included) finds the layout it expects. Its README holds the layout, the dev/prod split and the dependency rules; SKILL.md hard rule 14 covers CDNs and apps already on another stack.
 
-- `/api/*` JSON endpoints that call `runQuery` against the Keboola workspace.
-- The static frontend at `/` (`public/index.html` + `public/app.js` + CSS).
+Why it wins:
 
-The frontend loads Tailwind and Chart.js via CDN. No bundler, no build step, no `npm run build` to remember. One supervisord program, one nginx location block, one `setup.sh` line (`npm install`). The whole thing fits in a single repo with a flat structure.
+- One process tree, one nginx location, no CORS — the client and `/api/*` share an origin in both modes.
+- DuckDB caching lives in the Express process, so cache hits never cross a process boundary.
 
-Why this shape wins for dashboards:
+Pairs with [duckdb-caching.md](duckdb-caching.md) by default — for read-only dashboards, cache once into an in-memory DuckDB so the dashboard never re-hits Snowflake on a page render.
 
-- One process means one place to read logs and one port to map.
-- Static frontend served from the same Node process means no CORS, no proxy plumbing, no separate deploy of frontend assets.
-- DuckDB caching lives inside the same Node process, so cache hits never cross a process boundary.
+## Keboola's app preview: `kaiPreview()` in every Vite app
 
-Pairs with [duckdb-caching.md](duckdb-caching.md) by default — for read-only dashboards, cache once into an in-memory DuckDB so the dashboard never re-hits Snowflake on a page render. The cache and the API server live in the same process.
+`@keboola/vite-plugin-kai-preview` connects a Vite app to the preview in Keboola's app Builder:
 
-Runnable starter: `templates/nodejs-app/`.
+- On every page, in dev and in the build, it tells the preview whether the app rendered or crashed.
+- On the dev server, it lets the user pick parts of the page. Their message then names where each part is written (`src/File.tsx:line:col`) — edit there.
+
+The template ships it. An existing Vite app without it gets it in the first change you make to that app, so it works the same as a new one:
+
+1. `npm install --save-dev @keboola/vite-plugin-kai-preview`, and commit the lockfile.
+2. In `vite.config.ts`, `import { kaiPreview } from '@keboola/vite-plugin-kai-preview'` and add `kaiPreview()` to `plugins`. An app that renders into an element other than `#root` passes it: `kaiPreview({ mount: '#app' })`.
+3. Remove what it replaces, or the preview hears two signals: an inline plugin that injects an error/healthy script (older apps call it `kaiPreviewErrorHandler`), and copied `preview-signal.js`, `preview-picker.js` or `preview-source.js` with the plugins that load them.
+4. Keep the app's error boundary. It still sets `window.__kaiPreviewCrashed` and calls `window.__kaiNotifyError`; type those with the package's `KaiPreviewWindow`.
+5. Type-check and push. The running dev container installs the package and restarts its `app` program, so Vite must run as `[program:app]` in `keboola-config/supervisord-dev/`, started as in §Supervisord. An app on `[program:vite]` renames the section inside its existing `.conf` and runs the binary. If it did not run the binary before (`npx vite`, `npm run dev`), it then runs `deploy_data_app(mode='dev')` once: the stopped wrapper left Vite on port 3000. Check the preview for the pick button.
+6. Keep it out of the conversation: the user asked for their change, not this. No progress line about it, no mention in the reply — unless a step fails and holds up their change; then say so in one line.
+
+An app on an older release updates it the same way: `npm install --save-dev @keboola/vite-plugin-kai-preview@^<version>`, then steps 5 and 6.
+
+Without React the picker still works but cannot name source locations. An app not built with Vite gets none of it — leave it as it is.
 
 ## Multi-server pattern (Python backend + JS frontend) — use when you need it
 
-Reach for this only when you actually need a Python backend — an existing Python codebase, an ML model in Python, FastAPI/Flask services that are hard to port. For pure dashboarding the simpler single-Node shape (above) is preferred. Two processes mean two log streams, two ports, two dependency installs, and a more involved local-dev story.
+Reach for this only when you actually need a Python backend — an existing Python codebase, an ML model in Python, FastAPI/Flask services that are hard to port. For pure dashboarding the default shape (above) is enough. `templates/python-node-app/` is an overlay: copy `react-vite-app/` first, then the overlay on top. Two processes mean two log streams, two ports, two dependency installs, and a more involved local-dev story.
 
 Backend convention: Python on `:8050`.
-Frontend convention: Node on `:3000`. For bundled toolchains (Next.js, Vite), the frontend is pre-built and **committed to git** so `setup.sh` only installs deps — it does NOT run a build step. Building during `setup.sh` is slow and makes startup unreliable.
+Frontend convention: Node on `:3000`. Bundled frontends build in `setup.sh` (`npm run build`), never committed — a committed build bloats the repo past the managed-git push cap (see the `keboola-git` skill's build-at-deploy recipe).
 
-Nginx — two location blocks, more specific path first so it matches before the catch-all:
+The overlay's `keboola-config/` is the working reference — copy it, don't retype it:
 
-```nginx
-server {
-    listen 8888;
-    server_name _;
+- `nginx/sites/default.conf` — `/api/` to Python on `:8050` before the catch-all to Node on `:3000`, WebSocket pass-through for HMR.
+- `supervisord/services/backend.conf` (+ the `supervisord-dev/` twin with `--reload`) — one `[program:]` per process, beside the template's `app.conf`.
+- `setup.sh` / `setup-dev.sh` — `uv sync` and `npm install` in parallel, so cold start is `max(python_deps, node_deps)` rather than the sum; prod then runs `npm run build`.
 
-    location /api/ {
-        proxy_pass http://127.0.0.1:8050;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-
-    location / {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
-
-Supervisord — one `[program:]` per process, in separate `.conf` files (`backend.conf`, `frontend.conf`) so each can be enabled, restarted, and reasoned about independently.
-
-`setup.sh` parallel install — both stacks install at the same time so cold start is roughly `max(python_deps, node_deps)` rather than the sum:
-
-```bash
-#!/bin/bash
-set -Eeuo pipefail
-cd /app/backend && uv sync &
-cd /app/frontend && npm install &
-wait
-```
-
-Local dev: skip nginx and supervisord entirely. Run each process in its own terminal. Use the frontend dev server's proxy to route `/api/*` to the backend — Next.js: `rewrites` in `next.config.ts`; Vite: `server.proxy` in `vite.config.ts`. That way the frontend code calls `/api/...` everywhere and it works the same locally as in Keboola.
+Local dev: skip nginx and supervisord entirely. Run each process in its own terminal. Use the frontend dev server's proxy to route `/api/*` to the backend — Next.js: `rewrites` in `next.config.ts`; Vite: `server.proxy` in `vite.config.mts`. That way the frontend code calls `/api/...` everywhere and it works the same locally as in Keboola.
 
 User-identity passthrough across the local-vs-Keboola boundary (e.g. injecting an email header for testing) is app-specific convention, not a platform feature — see the placeholder in [storage-access.md](storage-access.md).
 
@@ -266,9 +254,11 @@ For the validate -> build -> verify change loop, see [dev-workflow.md](dev-workf
 
 When the platform sets `KBC_APP_MODE=dev` on the container, the image hot-reloads off the configured git branch. You don't have to redeploy on every push — the running container polls the branch and pulls changes. To opt in, add:
 
-- `keboola-config/supervisord-dev/<program>.conf` — required for dev mode. Hot-reload variant of your supervisord configs (e.g. `streamlit run app.py --server.runOnSave=true`, or `uvicorn --reload`, or `node --watch`).
+- `keboola-config/supervisord-dev/<program>.conf` — required for dev mode. Hot-reload variant of your supervisord configs (e.g. `streamlit run app.py --server.runOnSave=true`, or `uvicorn --reload`). Each push replaces the changed files by write-and-rename, so a dev watcher must poll: Vite with `watch.usePolling`, a Node server under `tsx watch` with `CHOKIDAR_USEPOLLING="1"`. After a dependency change the watcher restarts only the program named `app`, so give that name to the one that must reload new packages (in `react-vite-app`, Vite).
 - `keboola-config/setup-dev.sh` — optional. Dev-time dependency install. Falls back to `setup.sh` if absent.
 - `keboola-config/dev-deps` — optional. List of dependency file paths the in-pod watcher hashes for change detection. Lines starting with `#` and blank lines are ignored.
+
+To see what the app shows while it runs in dev mode, open it in your own browser through a preview link: [dev-workflow.md](dev-workflow.md) §Verify an app running in dev mode.
 
 Env vars:
 
