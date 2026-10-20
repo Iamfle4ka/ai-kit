@@ -114,7 +114,7 @@ deploy_data_app(action="deploy", configuration_id="<id-from-above>")
 - Only `modify_streamlit_data_app` replaces it, when it saves the configuration.
 - On an update you can send either the existing code with the injected `query_data` block, or the placeholder. The tool handles both.
 - A configuration written any other way keeps the literal placeholder. That includes the Storage API, kbagent, or a script. In that case don't use the placeholder: define `query_data` in the app code yourself (see "Direct RO workspace queries" in [storage-access.md](storage-access.md)).
-- If the literal placeholder reaches the runtime, the app breaks. Newer Streamlit runtimes refuse to start it, with an error that names the placeholder. Older ones start, but show `NameError: name 'QUERY_DATA_FUNCTION' is not defined` in the browser.
+- If the literal placeholder reaches the runtime, the app breaks. Streamlit runtime `3.0.1_python-3.13_streamlit-1.64` and newer refuse to start it, with an error that names the placeholder. Older runtimes start, but show `NameError: name 'QUERY_DATA_FUNCTION' is not defined` in the browser.
 
 ## Path B — Claude Code / local agent with filesystem + MCP
 
