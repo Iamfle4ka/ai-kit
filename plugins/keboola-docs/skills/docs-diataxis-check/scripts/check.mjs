@@ -28,7 +28,9 @@ const WANT_DIST = has('--dist');
 const BASE = flagVal('--base');
 const PATHS = flagVal('--paths');
 // --index: read pages and the nav from the git index (what the next commit records); the commit gate uses it.
-const SRC = makeSource(ROOT, { index: has('--index') });
+// --ref <commit>: read them from a commit instead (the gate's merge-base with main, to tell old findings from new).
+const REF = flagVal('--ref');
+const SRC = makeSource(ROOT, { index: has('--index'), ref: REF });
 
 const usage = (m) => { console.error(`✗ ${m}`); process.exit(2); };
 if (!SRC.exists(DOCS)) usage(`src/content/docs not found under ${ROOT}: run from the repo root or pass --root`);
@@ -38,7 +40,7 @@ const sh = (cmd) => { try { return execSync(cmd, { cwd: ROOT, encoding: 'utf8', 
 const isPage = (f) => /\.(md|mdx)$/.test(f) && !f.includes('/dist/');
 const walk = (d) => SRC.list(d, isPage);
 const selected = new Set();
-const skipFlagValues = new Set(['--root', '--base', '--paths']);
+const skipFlagValues = new Set(['--root', '--base', '--paths', '--ref']);
 for (let i = 0; i < args.length; i++) { const a = args[i]; if (a.startsWith('--')) { if (skipFlagValues.has(a)) i++; continue; } selected.add(path.resolve(ROOT, a)); }
 if (BASE) {
   const mergeBase = sh(`git merge-base ${BASE} HEAD`) || BASE;
@@ -250,12 +252,17 @@ function checkPage(file) {
   // D9 VERIFY / TODO markers: an owner in the source comment, and nothing in dist.
   // D16 template leftovers: a `TEMPLATE:` instruction (from docs-page's templates) still on the page.
   text.split(/\r?\n/).forEach((l, i) => { if (/\bTEMPLATE:/.test(l)) add('D16', 'FAIL', i + 1, `template instruction left on the page: "${l.trim().slice(0, 60)}"`); });
-  // Only comment text counts: "VERIFY" in prose or a link label is not a marker.
+  // Only comment text counts: "VERIFY" in prose or a link label is not a marker. Inside a comment,
+  // `VERIFY(` and `VERIFY:` are markers; a bare word is one only when it opens the comment, so a type
+  // marker that mentions VERIFY in passing is not flagged.
+  const PLACEHOLDER = /^<?(owner|name|who|tbd|someone|somebody|team|\?+|[\w-]+-owner|owner-[\w-]+)>?$/i;
   commentsOnly(noFence).forEach((l, i) => {
     for (const m of l.matchAll(/\b(VERIFY|TODO)\b(\(([^)]*)\)|:|\s|$)/g)) {
+      const bare = !m[2].startsWith('(') && m[2] !== ':';
+      if (bare && l.slice(0, m.index).trim() !== '') continue;
       const owner = m[2].startsWith('(') ? m[3].trim() : '';
-      if (!owner) add('D9', 'FAIL', ln(i), `${m[1]} without an owner: write ${m[1]}(Nikita): …`);
-      else if (/^<?(owner|name|who|tbd|\?+)>?$/i.test(owner)) add('D9', 'FAIL', ln(i), `${m[1]}(${owner}) is a placeholder, not a person: write ${m[1]}(Nikita): …`);
+      if (!owner) add('D9', 'FAIL', ln(i), `${m[1]} without an owner: write ${m[1]}(<the person who can confirm it>): …`);
+      else if (PLACEHOLDER.test(owner)) add('D9', 'FAIL', ln(i), `${m[1]}(${owner}) is a placeholder, not a person: name who can confirm it, e.g. ${m[1]}(Jordan Burger): …`);
     }
   });
   if (WANT_DIST && fs.existsSync(DIST)) {

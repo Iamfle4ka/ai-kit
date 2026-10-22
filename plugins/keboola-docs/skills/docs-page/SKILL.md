@@ -27,7 +27,7 @@ This file cites ids and never restates a rule. Long-form phase instructions:
 ## State and resume
 
 State lives outside the worktree, so no `git add -A` can commit it:
-`${CLAUDE_PLUGIN_DATA}/docs-page/<repo-dir-name>--<branch with / as ->.md`
+`${CLAUDE_PLUGIN_DATA}/docs-page/<repo-dir-name>--<branch with / as ->.md` (the variable is empty in a shell and in a file you read directly: it is `~/.claude/plugins/data/keboola-docs-keboola-claude-kit`)
 (frontmatter: `issue, title, type, template, slug, file, worktree, branch, phase, stops{type_ok,
 media_ok, commit_ok}, media[], checks{}, commit, updated`; body: Brief, Page map (approved), Open
 questions). **Every invocation reads this file first.** Found → print the phase and the three stop

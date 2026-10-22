@@ -10,8 +10,11 @@ Rules and gotchas learned on the Apps and Getting Started reshoots (2026-09/10).
 - Crop to the element (`page.screenshot({ clip })` or `locator.screenshot()`), inset about 8 px so
   rounded corners and shadows survive. A whole viewport is only for a page the reader must
   recognise as a whole.
-- Crop the top bar out (avatar, organisation, project) unless the shot is about it: crop below
-  y ≈ 100 CSS px.
+- Crop the top bar out (avatar, organisation, project) unless the shot is about it: in the 2026 UI
+  it ends at about 50 CSS px, so crop below y ≈ 52 (a crop at 100 cuts controls under the title).
+- Over CDP (`shoot-cdp.mjs`, `docs-clip/scripts/capture-states.mjs`) a new tab renders at 1x and
+  stops painting while its window is covered: both scripts set device scale 2 and focus emulation
+  and front the tab themselves. Use them rather than a hand-written `connectOverCDP` script.
 - UI-locator shots only: the reader needs to find the screen, not read it. Code in a screenshot
   goes into a fenced block on the page instead.
 
@@ -21,6 +24,16 @@ Rules and gotchas learned on the Apps and Getting Started reshoots (2026-09/10).
   node after " by ". The Apps list shows names in **Last Change**; crop to the Name column
   (x < ~860 CSS px with the Kai panel closed). The repository branch dropdown lists commit
   authors: never shoot it open.
+- Never print or save a page's HTML or inline scripts while probing, and never curl or wget a
+  Keboola page (even the public login page: R7 saved one with a CSRF token): the inline script holds
+  session tokens (G7). Read element text and roles only (`capture-states.mjs --list`).
+- Recon stays on read-only views: open tabs, menus and dialogs, then Escape. Never flip a switch or
+  a checkbox to see what it does (R6 toggled Debug mode), never press Save, Run, Deploy or Delete.
+- Names hide in more places than list views: the Events tab's "by" column, bucket and table owners,
+  Last Change, Kai's chat history and its suggestions (they name configurations), and the top bar
+  (organization and project) when `top` is under 52. Mask them in the plan; a mask that matches
+  nothing is reported.
+- Kai opens a "Cheaper Kai mode" promo popover on first open: press Escape before the shot.
 - No tokens, no e-mail addresses, no other project's configurations. OCR every final frame and
   poster with `docs-clip/scripts/ocr-scan.swift` (`swiftc -O ocr-scan.swift`), and read it with
   your eyes as well.
@@ -39,7 +52,13 @@ Rules and gotchas learned on the Apps and Getting Started reshoots (2026-09/10).
 - A modal's dim layer is the dialog's own fixed `bg-black/50` parent. Paint that parent white
   before cropping a dialog, or the shot reads as a dark block on the page.
 - The "Latest update" promo toast survives its X button (it cycles cards). Remove the
-  `position: fixed` ancestor of the element whose text starts with "Latest update".
+  `position: fixed` ancestor of the element whose text starts with "Latest update" (the one snippet
+  the plugin uses, in `capture-states.mjs` `cleanUp`):
+
+  ```js
+  for (const el of document.querySelectorAll('body *')) if ((el.innerText || '').startsWith('Latest update')) {
+    let n = el; while (n && getComputedStyle(n).position !== 'fixed') n = n.parentElement; (n ?? el).remove(); break; }
+  ```
 - Kai panel: the expanded panel shows a left rail with your past chat titles; click
   `button:has-text("Hide chat history")` before a capture. Reopening the panel resumes the LAST
   chat (even an Apps-builder chat); click the header "+" for a fresh one. To frame a question

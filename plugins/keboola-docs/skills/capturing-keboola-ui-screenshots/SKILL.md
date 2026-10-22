@@ -12,7 +12,7 @@ Run `scripts/shoot-cdp.mjs` from the root of a connection-docs worktree (it writ
 
 ## Overview
 
-The Apps docs reach the real product UI behind your Keboola login. Capture it by
+Docs pages need the real product UI behind your Keboola login. Capture it by
 connecting Playwright to your **already-open, logged-in Chrome over CDP** — no
 re-login, no session file to hand over. PNGs are written straight into
 `public/<section>/`, where the docs reference them by absolute path
@@ -31,52 +31,35 @@ must never be in frame, and the UI quirks that cost reshoots.
    Log into Keboola once in that window; the profile keeps the session. Verify:
    `curl -s localhost:9222/json/version`.
 2. **Playwright** installed (already in the repo).
-3. **Work in a development branch** in the project so nothing touches production.
+3. **Change nothing you do not clean up.** A shot that needs something created (a bucket, a
+   table, an app) creates it in a test object you delete right after, and says so to the author.
 
 ## Two capture modes
 
 **Static screens — navigate + shoot** (no interaction):
 ```bash
 S="${CLAUDE_PLUGIN_ROOT}/skills/capturing-keboola-ui-screenshots/scripts/shoot-cdp.mjs"
-node "$S" "<keboola-url>" <section/outname.png> [waitMs] [full]
-node "$S" current <section/outname.png>   # shoot the tab you already drove to
+node "$S" [--width 1100] "<keboola-url>" <section/outname.png> [waitMs] [full]
+node "$S" current <section/outname.png>   # shoot the Keboola tab you already drove to
 ```
-A bare `outname.png` lands in `public/data-apps/`; `CDP_URL` overrides the port. Outside a docs
+The section is required (`storage/x.png` lands in `public/storage/`); the shot is always 2x;
+`CDP_URL` overrides the port. Outside a docs
 worktree pass `--root <worktree>` (or set `KEBOOLA_DOCS_ROOT`).
 
-**Interactive flows — a throwaway CDP driver** (click/fill to reach a state).
-Write it in the session scratchpad and import Playwright from the worktree
-(`file://<worktree>/node_modules/playwright/index.mjs`); output temp shots to the scratchpad too, never
-into the repo; delete the driver after. Reusable core:
-```js
-import { chromium } from 'playwright';
-const browser = await chromium.connectOverCDP('http://localhost:9222');
-const page = await browser.contexts()[0].newPage();
-await page.goto(URL, { waitUntil: 'networkidle' });
-// Kill the "Latest update" promo toast that clutters shots:
-await page.evaluate(() => {
-  for (const el of document.querySelectorAll('body *')) {
-    const t = el.textContent || '';
-    if (t.trim().startsWith('Latest update') && t.length < 400) {
-      let n = el; for (let i = 0; i < 6 && n.parentElement; i++) {
-        const r = n.getBoundingClientRect();
-        if (r.width < 640 && r.height < 360 && r.left < 700) { n.style.display = 'none'; break; }
-        n = n.parentElement; } } }
-});
-// The page scrolls inside #scroll-container, not window — let Playwright scroll:
-await page.getByRole('button', { name: /create streamlit app/i }).scrollIntoViewIfNeeded();
-await page.screenshot({ path: 'shots/foo.png' });          // viewport
-await page.getByText('or create manually').screenshot(...) // tight element crop
-await browser.close(); // disconnects CDP only; leaves your Chrome open
-```
+**Interactive flows** (click, fill, upload to reach a state): write a plan for
+`${CLAUDE_PLUGIN_ROOT}/skills/docs-clip/scripts/capture-states.mjs` instead of a driver of your own.
+It takes the steps as JSON, opens its own tab (2x, focus emulation, fronted before every shot so a
+covered window does not hang it), removes the promo toast, masks the project schema and closes the
+tab. One `shot` without a ring gives a single UI-locator screenshot; copy it to `public/<section>/`.
+Its header has the plan format.
 
 ## Place & verify
 
-1. View each temp shot; keep the best, `cp` it to `public/data-apps/<name>.png`
-   matching the doc's `![alt](/data-apps/<name>.png)` reference.
+1. View each temp shot; keep the best, `cp` it to `public/<section>/<name>.png`
+   matching the page's `![alt](/<section>/<name>.png)` reference.
 2. Reference/rename in the Markdown; delete any stale image it replaces (grep the
    old name first — must be unreferenced).
-3. `npm run build` clean, then `node scripts/audit-phase2.mjs` → **MISSING IMAGES: 0**.
+3. `npm run build` clean, then `node "${CLAUDE_PLUGIN_ROOT}/scripts/media-inventory.mjs" <page>` → **0 missing**.
 4. Delete the scratch driver and its temp shots.
 
 ## Safety — confirm side effects first

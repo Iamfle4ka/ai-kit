@@ -40,8 +40,10 @@ Hard rules, from the people who review this section:
 - **Captions a reader can read:** the page column is 713 px in a 1280-px window (measured
   2026-10-06; `clip_metrics.sh --page-width` overrides), so text needs at least 24 px on a 1280
   canvas to render at 13 px. The old "22 px" figure assumed an 800-px column and is retired.
-- **MP4 on pages**, `<video autoplay loop muted playsinline poster …>`. GIF only for Slack, a PR
-  body or a README, exported separately.
+- **MP4 on pages**, `<video autoplay loop muted playsinline poster …>`, for a recording and, since
+  2026-10-22, for a **states clip** too (a few stills of one screen and its dialogs, built by
+  `capture-states.mjs`, joined by dissolves at 30 fps: see "States clip on a page" below). A GIF is
+  only for Slack, a PR body or a README.
 - **≤ 30 seconds, ≤ 1 MB** on a page. Over budget means cut content, not raise the ceiling.
 - **Nothing in frame that is not ours to publish** (PRDCT-616): no colleague names or avatars, no
   tokens, no other project's configurations. Shoot in project 264, element-cropped, and read every
@@ -166,7 +168,7 @@ ffmpeg -y -i clip.mp4 -i palette.png -lavfi "fps=12,scale=800:-1:flags=lanczos,p
 gifsicle -O3 --lossy=30 --colors 128 clip.gif -o clip.opt.gif
 ```
 
-Never embed the GIF in a docs page: it is five to ten times the size of the MP4 for worse text.
+Never embed a GIF exported from a recording in a docs page: it is five to ten times the size of the MP4 for worse text. A states GIF is a different thing (below).
 
 ## Before you commit
 
@@ -190,16 +192,35 @@ once; renders go to `remotion/out/`, never into the repo.
   into `notes/getting-started/DECISIONS.md` (or the section's own notes) the same day.
 - Finished clips and posters: `public/<section>/…` in the docs repo, committed.
 
-## GIF on a page, not just MP4
+## States clip on a page
 
-Two kinds of clip. An MP4 (`record.mjs` → `postgif.sh`) is for a flow with real pacing: a Kai
-chat, a job running. A GIF is for a **behaviour a still cannot carry and the reader cannot click**:
-a hover-revealed toolbar, a tooltip, a menu and what it opens, a tab choice that follows the
-reader to the next page. Build it as states, not as a recording — `scripts/states-to-gif.sh` —
-and place it directly under the sentence it proves, with one line of lead-in, the way
-`extend/component/ui-options/ui-examples/*.gif` are placed. Budget: under 250 KB, 3-8 s, cropped
-to the region that carries the point. The two large GIFs in the repo (2.5 MB and 9.5 MB) are the
-counter-example.
+Two kinds of clip. A recording (`record.mjs` → `postgif.sh`) is for a flow with real pacing: a Kai
+chat, a job running. A **states clip** is for a **behaviour a still cannot carry and the reader cannot
+click**: a hover-revealed toolbar, a tooltip, a menu and what it opens, a tab choice that follows the
+reader to the next page, a confirmation that disappears. Pick the plan from the "States GIF by UI
+pattern" table in `references/clip-grammar.md`, and at STOP 2 ask the author for the frame: **the
+whole screen** (Recommended) or **only the area where the action happens**. Build it in three steps:
+
+1. `scripts/capture-states.mjs plan.json` (your logged-in Chrome over CDP, 760 px, 2x, masked, focus
+   blurred, its own window).
+2. `uv run --with pillow python scripts/ring-frames.py <frames dir> [--crop action]`: the ring fades in
+   before each click, states dissolve into each other, the last dissolves back into the first; 30 fps;
+   the whole screen unless `--crop action`. It prints the next command.
+3. `scripts/states-to-gif.sh <out>.mp4 30 "<plan>"`: an H.264 loop (~110 KB for a full screen) and
+   `<out>-poster.png` next to it.
+
+On the page, directly under the sentence it proves, with one line of lead-in:
+
+```mdx
+<video autoplay loop muted playsinline poster="/<section>/<page>-<what>-poster.png" aria-label="<what happens, in order>">
+  <source src="/<section>/<page>-<what>.mp4" type="video/mp4" />
+</video>
+```
+
+Budget and the one-place rule: `references/clip-grammar.md` (≤ 250 KB, 3–9 s, ≤ 760 px wide, one
+screen and its dialogs). For Slack or a PR, the same frames make a GIF:
+`ring-frames.py --fps 10 --xfade 0.2 --ring-in 0.2` then `states-to-gif.sh <out>.gif 10 "<plan>"`
+(a GIF as smooth as the MP4 weighed 720 KB, 2026-10-22).
 
 Recorder hygiene learned the hard way (2026-09-22): never click an *ancestor* of some text to
 dismiss a popover — one such click hit the top bar's "New Development Branch" button and opened its

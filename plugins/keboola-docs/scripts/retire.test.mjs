@@ -67,3 +67,65 @@ test('refuses a missing source, a missing target and from == to', () => {
   assert.equal(run(dir, '--from', 'guide/no-desc', '--to', 'guide/nope').status, 2);
   assert.equal(run(dir, '--from', 'guide/no-desc', '--to', 'guide/no-desc').status, 2);
 });
+
+test('merge into a page with Limits and no Next: folded as its own section before Limits; self-links go to it', () => {
+  const dir = repo();
+  fs.writeFileSync(path.join(dir, DOC, 'ref-target.md'), "---\ntitle: Reference target\nslug: 'guide/ref-target'\nredirect_from:\n    - /guide/ancient/\n---\n\nLede. See [the extra page](/guide/extra/).\n\n## Fields\n\nA table.\n\n## Limits\n\nTen per day.\n");
+  fs.writeFileSync(path.join(dir, DOC, 'extra.md'), "---\ntitle: Extra settings\nslug: 'guide/extra'\n---\n\nExtra lede.\n\n## Option\n\nText.\n");
+  const { status, out } = run(dir, '--from', 'guide/extra', '--to', 'guide/ref-target', '--merge');
+  assert.equal(status, 0);
+  const t = read(dir, DOC + 'ref-target.md');
+  assert.ok(t.indexOf('## Extra settings') > 0 && t.indexOf('## Extra settings') < t.indexOf('## Limits'), 'folded before Limits');
+  assert.match(t, /\[the extra page\]\(#extra-settings\)/, 'the self-link points at the folded section');
+  assert.match(t, /redirect_from:\n    - \/guide\/ancient\/\n    - \/guide\/extra\/\n/, 'existing lines kept, new one in their indent');
+  assert.deepEqual(out.redirectsAdded, ['/guide/extra/']);
+});
+
+test('rename keeps the moved page media out of the orphan list', () => {
+  const dir = repo();
+  fs.mkdirSync(path.join(dir, 'public', 'guide'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'public', 'guide', 'only-here.png'), 'x');
+  const p = path.join(dir, DOC, 'skip-next.md');
+  fs.writeFileSync(p, read(dir, DOC + 'skip-next.md').replace(/\n## /, '\n![Shot](/guide/only-here.png)\n\n## '));
+  const { status, out } = run(dir, '--from', 'guide/skip-next', '--rename', 'guide/skip-renamed');
+  assert.equal(status, 0);
+  assert.deepEqual(out.orphanMedia, []);
+  assert.ok(fs.existsSync(path.join(dir, 'public', 'guide', 'only-here.png')));
+});
+
+test('links without the trailing slash are rewritten too', () => {
+  const dir = repo();
+  fs.appendFileSync(path.join(dir, DOC, 'last.md'), '\nSee [skip](/guide/skip-next) and [anchor](/guide/skip-next#x).\n');
+  const { status } = run(dir, '--from', 'guide/skip-next', '--to', 'guide/clean-howto');
+  assert.equal(status, 0);
+  const t = read(dir, DOC + 'last.md');
+  assert.ok(t.includes('(/guide/clean-howto/)') && t.includes('(/guide/clean-howto/#x)') && !t.includes('/guide/skip-next'));
+});
+
+test('merge keeps a CRLF target CRLF and folds into the section the target already has', () => {
+  const dir = repo();
+  fs.writeFileSync(path.join(dir, DOC, 'parent.md'), "---\ntitle: Parent\nslug: 'guide/parent'\n---\n\r\nLede.\r\n\r\n## 2 Extra settings\r\n\r\nShort summary.\r\n\r\n## 3 Other\r\n\r\nText.\r\n");
+  fs.writeFileSync(path.join(dir, DOC, 'extra.md'), "---\ntitle: Extra settings\nslug: 'guide/extra'\n---\n\nThe long version.\n");
+  const { status, out } = run(dir, '--from', 'guide/extra', '--to', 'guide/parent', '--merge');
+  assert.equal(status, 0);
+  const t = read(dir, DOC + 'parent.md');
+  assert.equal(out.foldedInto, '## 2 Extra settings');
+  assert.equal((t.match(/Extra settings/g) ?? []).length, 1, 'no second heading');
+  assert.ok(t.indexOf('The long version.') > t.indexOf('Short summary.') && t.indexOf('The long version.') < t.indexOf('## 3 Other'));
+  const body = t.split('---\n').slice(2).join('---\n');
+  assert.ok(!/[^\r]\n/.test(body.slice(1)), 'every body line ends in CRLF');
+});
+
+test('rename moves the media under the old URL and rewrites their references', () => {
+  const dir = repo();
+  fs.mkdirSync(path.join(dir, 'public', 'guide', 'skip-next'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'public', 'guide', 'skip-next', 'shot.png'), 'x');
+  const p = path.join(dir, DOC, 'skip-next.md');
+  fs.writeFileSync(p, read(dir, DOC + 'skip-next.md').replace(/\n## /, '\n![Shot](/guide/skip-next/shot.png)\n\n## '));
+  const { status, out } = run(dir, '--from', 'guide/skip-next', '--rename', 'guide/skip-renamed');
+  assert.equal(status, 0);
+  assert.ok(fs.existsSync(path.join(dir, 'public', 'guide', 'skip-renamed', 'shot.png')));
+  assert.ok(!fs.existsSync(path.join(dir, 'public', 'guide', 'skip-next', 'shot.png')));
+  assert.match(read(dir, DOC + 'skip-renamed.md'), /\(\/guide\/skip-renamed\/shot\.png\)/);
+  assert.deepEqual(out.orphanMedia, []);
+});

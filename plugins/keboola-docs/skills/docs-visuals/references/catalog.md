@@ -9,8 +9,10 @@ Every element must survive the markdown twin: plain-string props on one line, on
   `src/components/getting-started/Prereqs.astro` adds `from`/`to` slots and tab lines (GS branch).
 - **Wording** lives in `prereqs.mjs`, so the same item reads the same on every page.
 - **Use:** `<Prereqs needs={['project']} groupLabel="Depending on how you build">` with page items as
-  `<li>` children and a second list as `<li slot="group">`. Tab-specific lines: `tabs={3}` plus
-  `<span slot="prompt|ui|cli">` overrides.
+  `<li>` children and a second list as `<li slot="group">`. Tab-specific lines: `tabs={N}` plus
+  `<span slot="prompt|ui|cli">` overrides. `tabs` takes the first N of Prompt, UI, CLI / API, so a
+  page with only UI and CLI tabs cannot use it: write the CLI line as a page item instead
+  (`<li><strong>For the CLI / API tab:</strong> …</li>`, as `storage/tables/load-csv` did).
 - **Example:** `data-apps/build-locally.mdx:25`, every `getting-started/*/index.mdx`.
 - Nikita likes the boxed look; use it on every task page instead of a "Prerequisites" heading.
 
@@ -27,7 +29,10 @@ Every element must survive the markdown twin: plain-string props on one line, on
 - **Labels are a contract**, byte for byte: `Prompt`, `UI`, `CLI / API`. The sync key remembers the
   reader's choice by label text; a different spelling silently drops out of the sync.
 - **Use:** `<PathIntro tabs={3} manual={false} approvals={false} yours="…" />` once, before the first tabs.
-- **Example:** `getting-started/app/index.mdx:124`. Apps pages use `<Tabs>` with the same labels.
+- **Example:** `getting-started/app/index.mdx:124`. `syncKey="howto"` with these labels is the
+  Getting Started contract (GS branch); main has no `howto` tabs yet. The Apps pages on main sync
+  their own choices instead: `syncKey="ai-client"` (Claude Code, Cursor, …), `"oidc-provider"`,
+  `"os"`. A new task page with Prompt / UI / CLI ways through uses `howto` and these labels.
 
 ## FlowStrip: how it works in three or four boxes
 
@@ -76,8 +81,13 @@ Every element must survive the markdown twin: plain-string props on one line, on
 
 - Hand-authored SVG under `public/<section>/`, referenced as an image with alt text that says what
   the picture says: `public/cli/how-it-works.svg`, `public/workspace/workspace-states.svg`.
-  Keboola palette (`docs-clip/references/explainer-look.md`), text as text (not outlined), light and
-  dark readable.
+  Keboola palette (`docs-clip/references/explainer-look.md`), text as text (not outlined).
+- **Size:** viewBox at most 640 wide and labels at least 16 px in it. The column is 713 px and
+  shrinks on a phone; a 920-wide diagram with 12 px labels rendered at 7 px in the field test.
+  (`cli/how-it-works.svg`, 860 wide with 11.5–15 px labels, is too small by this rule.)
+- **Light and dark:** an `<img>` SVG cannot follow Starlight's theme toggle (`prefers-color-scheme`
+  inside the file follows the OS, not the site). Draw it on a white rounded card with its own
+  border, so it reads the same in both themes.
 
 ## Motion and screenshots (other skills)
 

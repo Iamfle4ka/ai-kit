@@ -1,5 +1,7 @@
 # Before a clip is committed
 
+`${CLAUDE_PLUGIN_ROOT}` below is the keboola-docs plugin directory. Claude Code fills it in when a skill loads, not in this file and not in your shell; if a command finds it empty, set it first: `export CLAUDE_PLUGIN_ROOT="$(claude plugin list 2>/dev/null | awk '/keboola-docs@/{f=1} f && /Read from:/{print $3; exit}')"`.
+
 Run through this every time. Each line is here because it went wrong once.
 
 ## What is in frame
@@ -23,7 +25,8 @@ Run through this every time. Each line is here because it went wrong once.
 
 - [ ] Every number visible in frame is one the page states, or the page says values move.
 - [ ] Values that come from live data (a forecast, a job duration, a row count that changes) are
-      called out as "on the day of recording" in the `aria-label` or the authoring comment.
+      called out as example values in the `aria-label` or the authoring comment. Read the dates off
+      the frames; the recording day is often not the day they show (R3: rows dated 1 Oct, shot 15 Oct).
 - [ ] The caption chips say something the page also says. A chip is a signpost, not a new fact.
 
 ## Budgets

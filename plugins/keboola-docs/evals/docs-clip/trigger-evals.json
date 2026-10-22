@@ -30,5 +30,9 @@
   {
     "query": "render a marketing video for the product launch with the Kai mascot",
     "should_trigger": false
+  },
+  {
+    "query": "record videos of Agnes answering the demo prompts for the sales call",
+    "should_trigger": false
   }
 ]

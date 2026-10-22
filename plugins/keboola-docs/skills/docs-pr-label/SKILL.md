@@ -30,6 +30,7 @@ PRs).
   node $L 1187 1185                 # dry run: what would be added, and why
   node $L --apply 1187              # add them
   node $L --all-mine                # dry run over every open PR by the authors in rules.json
+  node $L --preview --title "<title>" --branch <b> --files a.md,b.mjs   # before the PR exists (docs-ship)
   ```
 
 ## The rules (rules.json)

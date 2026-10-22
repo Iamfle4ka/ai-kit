@@ -88,6 +88,12 @@ being handed off, where the FAIL rules cost minutes to meet.
 - 2026-10-14: D16 added with the keboola-docs plugin. A `TEMPLATE:` leftover is the one way a
   skeleton reaches readers; the gate refuses the commit. Fixture: `template-left.md`.
 - 2026-10-13, Nikita: connector catalogs are exempt from D5 and D12; their nav order is alphabetical, not a reading order (writers pass, dbt trigger in #1190).
+- 2026-10-15: D9 reads `VERIFY(` and `VERIFY:` as markers, and a bare VERIFY only when it opens the
+  comment; a type marker that mentions VERIFY in passing is not flagged. Placeholder owners now also
+  include `*-owner`, `owner-*`, `someone`, `team` (the field test let `VERIFY(storage-owner)` through).
+- 2026-10-15: the commit gate reports a FAIL the page already had on the merge-base with main as a WARN
+  ("already on main"), except D9 and D16. Touching a page for one link no longer pulls its old D1/D5
+  into the change.
 - 2026-10-14: marker format for agents. The site build (`page-markdown.mjs`, branch
   `agents-llms-twins`) copies the type and date into each page's markdown twin and `llms.txt`
   entry. It reads only `<Type>-type page` or `<Type>-hub page` (`Overview-hub` counts as

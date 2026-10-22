@@ -9,7 +9,9 @@ case "$f" in
   *) exit 0 ;;
 esac
 
-root="${CLAUDE_PROJECT_DIR:-$PWD}"
+# the checkout the edited file lives in (not the session directory: a worktree elsewhere was skipped)
+root="$(cd "$(dirname "$f")/.." 2>/dev/null && pwd)"
+[ -f "$root/scripts/convert-nav.mjs" ] || root="${CLAUDE_PROJECT_DIR:-$PWD}"
 cd "$root" 2>/dev/null || exit 0
 
 if npm run gen:sidebar >/dev/null 2>&1; then

@@ -31,7 +31,7 @@ author picks or types a correction in "Other". Three stops, three questions at m
 |---|---|---|
 | 1 Type and map | "Page map" | Go with the map (Recommended) · Fold into `<existing page>` instead · Change the type · Change the place |
 | 2 Visuals | "Visuals" | `<proposed elements and media>` (Recommended) · Text only · A different element or form |
-| 3 Ship | "Ship" | Push and open the PR · Keep the commit local · Discard the branch |
+| 3 Ship | "Ship" | Keep the commit local (Recommended) · Push and open the PR · Discard the branch |
 
 Without the tool (another host, a scripted run): the table, then one line "Reply ok, or name the
 row to change", and stop.
@@ -42,3 +42,5 @@ row to change", and stop.
 - No two-column layouts, tabs or padded spaces for alignment.
 - No more than one table per stop; details go to the state file, not to the chat.
 - No stop skipped because the answer "seems obvious".
+- No outward action as the first or default option. Pushing stays a deliberate pick, and it
+  happens only through `docs-ship` after the author's "ok".

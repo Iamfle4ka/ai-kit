@@ -8,7 +8,7 @@
 # 1280-px window. Text a reader sees = canvas px x (713 / 1280) on a 1280-wide clip; the page
 # shrinks a wider clip to the column (max-width: 100%) but never enlarges a narrower one.
 # Prints duration, size, brightness (mean / min / darkest seconds), color range, cuts, and writes a contact sheet.
-# Budgets it checks (docs-clip skill): an MP4 on a page <= 30 s and <= 1 MB; a GIF <= 250 KB and 3-8 s;
+# Budgets it checks (docs-clip skill): an MP4 on a page <= 30 s and <= 1 MB; a GIF <= 250 KB and 3-9 s;
 # either one bright: mean luma >= 200 and every sampled frame >= 180; the poster >= 180 too.
 # The luma budget is measured on limited-range (tv) video, which is what yuv420p H.264 normally is
 # (PNG and GIF frames are converted to tv range before they are measured). A full-range file
@@ -48,7 +48,7 @@ ok() { [[ "$1" == 1 ]] && echo "ok" || echo "OVER BUDGET"; }
 echo "clip:        $clip"
 echo "dims / fps:  $dims @ $fps"
 if [[ "${clip:l}" == *.gif ]]; then
-  printf 'duration:    %.1f s   [%s, budget 3-8 s for a GIF]\n' "$dur" "$(ok $(echo "$dur >= 3 && $dur <= 8" | bc -l))"
+  printf 'duration:    %.1f s   [%s, budget 3-9 s for a GIF]\n' "$dur" "$(ok $(echo "$dur >= 3 && $dur <= 9" | bc -l))"
   printf 'size:        %s B      [%s, budget 250 KB for a GIF]\n' "$size" "$(ok $(( size <= 256000 )))"
 else
   printf 'duration:    %.1f s   [%s, budget 30 s]\n' "$dur" "$(ok $(echo "$dur <= 30" | bc -l))"

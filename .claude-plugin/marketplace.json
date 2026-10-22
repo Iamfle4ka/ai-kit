@@ -66,8 +66,8 @@
     },
     {
       "name": "keboola-docs",
-      "description": "Write, update, retire and ship pages on help.keboola.com (keboola/connection-docs) by the Diátaxis rules: a guided page workflow with proposals and stops, rule and link checks, UI screenshots and clips (Remotion included), a commit gate, and PR labels.",
-      "version": "0.4.1",
+      "description": "For contributors to keboola/connection-docs (help.keboola.com): write, update, retire and ship pages by the Diátaxis rules, with a guided page workflow, rule, link and VERIFY checks, UI screenshots and clips (Remotion included), a commit gate and PR labels.",
+      "version": "0.7.6",
       "source": "./plugins/keboola-docs",
       "category": "documentation"
     }

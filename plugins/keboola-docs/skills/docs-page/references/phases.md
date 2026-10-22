@@ -1,5 +1,7 @@
 # docs-page phases, long form
 
+`${CLAUDE_PLUGIN_ROOT}` below is the keboola-docs plugin directory. Claude Code fills it in when a skill loads, not in this file and not in your shell; if a command finds it empty, set it first: `export CLAUDE_PLUGIN_ROOT="$(claude plugin list 2>/dev/null | awk '/keboola-docs@/{f=1} f && /Read from:/{print $3; exit}')"`. The data directory (state files, `gate-log.jsonl`) is empty in the shell too; it is `~/.claude/plugins/data/keboola-docs-keboola-claude-kit`.
+
 SKILL.md has the table; this file has what each phase does when the table is not enough.
 Rule ids refer to `../../docs-diataxis-check/references/rules.md`.
 
@@ -78,12 +80,20 @@ end with several destinations a CardGrid). Then motion and screenshots. Decide f
 |---|---|---|
 | how-to (Apps, Storage, Flows…) | one UI-locator screenshot per screen a step ends on | a stage strip when the reader walks 3–6 stages in order (docs-stage-strip) |
 | tutorial | screenshots at the checkpoints | one clip when something moves (Kai working, a job progressing) |
-| reference, explanation | none | a diagram (hand-authored SVG under `public/<section>/`) when the model is spatial |
+| reference, explanation | none | a diagram (hand-authored SVG under `public/<section>/`) when the model is spatial; a states GIF only when the author asks for one, placed after the paragraph or table it shows, never as how-to steps |
 | Getting Started hub | the hero explainer, ≤ 10 s | never a second clip |
 | component page | the Connection and Row configuration screenshots | nothing else |
 
+Before proposing a states GIF, apply the clip-grammar rule of one place
+(`skills/docs-clip/references/clip-grammar.md`, "Three forms"): a states GIF stays on one screen and
+the dialogs it opens. A flow across screens is numbered text steps, plus a GIF of the dialog part
+only, or a narrated recording. In the STOP 2 table, name the form, the viewport (760 px for a states
+GIF, so 14 px UI labels stay ≥ 13 px in the 713 px column), the frame, the step it sits under (the last one it shows), the number of states and the duration (3–9 s). The frame is the author's choice and goes into the STOP 2 question: **whole screen (Recommended)** or **only the action area**. On the page a states clip is a 30 fps MP4 loop with a poster (`states-to-gif.sh <out>.mp4`), embedded like any clip with `<video autoplay loop muted playsinline poster>`.
+Capture it with `docs-clip/scripts/capture-states.mjs`, ring it with `ring-frames.py`, assemble it
+with `states-to-gif.sh`: no hand-written capture code.
+
 Propose the list with file names (`public/<section>/<page>-<what>.png`) and the reason; stop;
-record `stops.media_ok`. Then run the skill for each item. Every clip goes through the `checker`
+record `stops.media_ok` and fill `media[]` (file, form, size, checker verdict) as each item lands. Then run the skill for each item. Every clip goes through the `checker`
 agent before it counts as done; every screenshot is read for names, tokens and the promo toast
 (capturing-keboola-ui-screenshots/references/keboola-ui-capture.md).
 
@@ -102,6 +112,11 @@ In this order, fixing in place between steps:
 7. `checker` agent last, with the session transcript path, the deliverables and a scratch dir.
    FIX → fix and re-run until PASS.
 
+Record each result in the state file's `checks{}` (`build`, `script`, `diataxis_checker`, `links`,
+`fact_checker`, `guide_tester` with its mode, `checker`): docs-ship builds the PR body from it.
+If a check changes a fact the author approved at a stop (a source turns up, a label differs), show
+that stop's table again with the change marked, and wait for the answer.
+
 ## Phase 6: commit
 
 Handoff block (goes into the commit body and later the PR body):
@@ -113,8 +128,11 @@ VERIFY: VERIFY(Michal): the 15-minute default (data-apps/pause.md:41)
 Open questions: none
 ```
 
-`git add <page> <media> _data/navigation.yml src/sidebar.mjs` (never `-A`), then
-`git commit -m "PRDCT-nnn: <title>" -m "<handoff block>"`. The commit gate (PreToolUse hook)
-re-runs the Diátaxis check and refuses FAIL; `DOCS_GATE=skip git commit …` is the hatch for a WIP
-commit and must be said out loud. Record the sha, set `phase: done`, and end with:
+Two separate tool calls: first `git add <page> <media> _data/navigation.yml src/sidebar.mjs`
+(never `-A`), then `git commit -m "PRDCT-nnn: <title>" -m "<handoff block>"`. The commit gate runs
+before a command, so it refuses `git add … && git commit` in one call. Without a ticket the subject
+is `<section>: <title>`. The gate re-runs the Diátaxis check on the staged blobs and refuses a new
+FAIL; a FAIL the page already had on main comes back as a WARN, which is not this page's job to fix; `DOCS_GATE=skip git commit …` is the hatch for a WIP
+commit and must be said out loud. Record the sha, `stops.commit_ok` (the time the handoff was shown),
+set `phase: done`, and end with:
 "Committed <sha>. Say ok to ship (push + PR via docs-ship)."

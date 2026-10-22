@@ -306,3 +306,37 @@ test('--index reads the staged blob, not the working-tree file', () => {
   assert.ok(ids(at(), 'FAIL').includes('D3'), 'the working tree has no lede');
   assert.deepEqual(ids(at('--index'), 'FAIL'), [], 'the staged blob still has it');
 });
+
+function tmpRepo() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'check-ref-'));
+  fs.cpSync(REPO, dir, { recursive: true });
+  const env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
+  const g = (...a) => spawnSync('git', a, { cwd: dir, env, encoding: 'utf8' });
+  g('init', '-q'); g('add', '-A'); g('commit', '-q', '-m', 'base');
+  const at = (file, ...a) => JSON.parse(spawnSync(process.execPath, [SCRIPT, '--root', dir, '--json', ...a, file], { encoding: 'utf8' }).stdout).pages[0];
+  return { dir, g, at };
+}
+
+test('--ref reads a page as it was in a commit', () => {
+  const { dir, g, at } = tmpRepo();
+  const base = g('rev-parse', 'HEAD').stdout.trim();
+  const p = path.join(dir, page('clean-howto.md'));
+  fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace(/^Practical recipes.*$/m, '## Heading first'));
+  g('commit', '-q', '-am', 'break the lede');
+  assert.ok(ids(at(page('clean-howto.md')), 'FAIL').includes('D3'), 'HEAD has no lede');
+  assert.deepEqual(ids(at(page('clean-howto.md'), '--ref', base), 'FAIL'), [], 'the base commit still has it');
+});
+
+test('D9: a VERIFY mentioned inside the type marker is not a marker; a placeholder owner is', () => {
+  const { dir, at } = tmpRepo();
+  const p = path.join(dir, page('clean-howto.md'));
+  const text = fs.readFileSync(p, 'utf8');
+  fs.writeFileSync(p, text.replace('Fixture page used by check.test.mjs.', 'Fixture page; no VERIFY left on it.'));
+  assert.deepEqual(find(at(page('clean-howto.md')), 'D9'), []);
+  for (const owner of ['storage-owner', 'owner-storage', 'someone', 'team']) {
+    fs.writeFileSync(p, text.replace('## Set the guide up', `<!-- VERIFY(${owner}): check it -->\n\n## Set the guide up`));
+    assert.equal(find(at(page('clean-howto.md')), 'D9').length, 1, owner);
+  }
+  fs.writeFileSync(p, text.replace('## Set the guide up', '<!-- VERIFY(Jiří Soukup): check it -->\n\n## Set the guide up'));
+  assert.deepEqual(find(at(page('clean-howto.md')), 'D9'), []);
+});

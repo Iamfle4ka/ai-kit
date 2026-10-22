@@ -99,7 +99,13 @@ test('deleting a page without a redirect_from anywhere is denied; with one it pa
   git(dir, 'rm', '-q', 'src/content/docs/guide/no-desc.md'); git(dir, 'add', '-A');
   const reason = denied(gate(dir, 'git commit -m "retire"'));
   assert.match(reason ?? '', /retired, but no page lists \/guide\/no-desc\/ in redirect_from/);
+  assert.match(reason ?? '', /navigation\.yml still lists \/guide\/no-desc\//);
   fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace("slug: 'guide/clean-howto'\n", "slug: 'guide/clean-howto'\nredirect_from:\n  - /guide/no-desc/\n"));
+  git(dir, 'add', '-A');
+  // the redirect alone is not enough while the nav still lists the retired page
+  assert.match(denied(gate(dir, 'git commit -m "retire"')) ?? '', /navigation\.yml still lists/);
+  const nav = path.join(dir, '_data', 'navigation.yml');
+  fs.writeFileSync(nav, fs.readFileSync(nav, 'utf8').replace(/ *- url: \/guide\/no-desc\/\n *title: No description\n/, ''));
   git(dir, 'add', '-A');
   assert.equal(denied(gate(dir, 'git commit -m "retire"')), null);
 });
@@ -156,4 +162,218 @@ test('deleting a public image that a page reaches only through a relative <img> 
   git(dir, 'add', '-A'); git(dir, 'commit', '-q', '-m', 'relative img');
   git(dir, 'rm', '-q', 'public/guide/clean-howto/raw.png');
   assert.match(denied(gate(dir, 'git commit -m x')) ?? '', /public\/guide\/clean-howto\/raw\.png deleted, but still referenced/);
+});
+
+// ---- 0.6.0: command parsing, old debt, nav, messages, log -----------------------------------------
+
+test('staging and committing in one command is refused, whatever is staged', () => {
+  const dir = repo();
+  fs.writeFileSync(PAGE(dir, 'new.md'), "---\ntitle: New\nslug: 'guide/new'\ndescription: d\n---\n\n## Steps\n\n1. x\n");
+  for (const cmd of ['git add -A && git commit -m x', 'git add src/content/docs/guide/new.md; git commit -m x', 'git rm -q --cached README.md\ngit commit -m x']) {
+    assert.match(denied(gate(dir, cmd)) ?? '', /in one command[\s\S]*Stage in one call, then commit in the next/, cmd);
+  }
+  // a plain status or log before the commit is fine
+  assert.equal(denied(gate(dir, 'git status --short && git commit -m x')), null);
+});
+
+test('a heredoc or a quoted string that mentions git commit is not a commit', () => {
+  const dir = repo();
+  fs.copyFileSync(path.join(FIXTURE, 'src/content/docs/guide/no-lede.md'), PAGE(dir, 'staged-bad.md'));
+  git(dir, 'add', '-A');
+  assert.equal(gate(dir, "cat >> log.md <<'EOF'\nthen `git add x && git commit -m y`\n; git commit -F -\nEOF"), null);
+  assert.equal(gate(dir, 'echo "; git commit -m x"'), null);
+  // but a commit on the second line of a command is a commit
+  assert.match(denied(gate(dir, 'echo start\ngit commit -m x')) ?? '', /D3/);
+});
+
+test('a message that looks like a flag does not turn the commit into -a', () => {
+  const dir = repo();
+  const p = PAGE(dir, 'clean-howto.md');
+  const good = fs.readFileSync(p, 'utf8');
+  fs.writeFileSync(p, good.replace('**Next:**', 'One more line.\n\n**Next:**'));
+  git(dir, 'add', '-A');
+  fs.writeFileSync(p, good.replace(/^Practical recipes.*\n\n/m, ''));   // unstaged break: lede gone
+  assert.equal(denied(gate(dir, 'git commit -m "fix -bar and -all"')), null);
+  // control: a real -a takes the broken working tree and is denied
+  assert.match(denied(gate(dir, 'git commit -am "x"')) ?? '', /D3/);
+});
+
+test('a FAIL the page already had on main is a warning, a new FAIL still blocks', () => {
+  const dir = repo();
+  git(dir, 'branch', 'main');
+  const p = PAGE(dir, 'no-desc.md');             // on main it fails D1 (no description)
+  fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace('More prose.', 'More prose, with a [link](/guide/).'));
+  git(dir, 'add', '-A');
+  const o = gate(dir, 'git commit -m "one link"');
+  assert.equal(denied(o), null);
+  assert.match(o.hookSpecificOutput.additionalContext, /D1 .*already on main, not this change/);
+  // a VERIFY without an owner added to the same old page is never old debt
+  fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace('More prose', '<!-- VERIFY: check this -->\n\nMore prose'));
+  git(dir, 'add', '-A');
+  assert.match(denied(gate(dir, 'git commit -m x')) ?? '', /D9/);
+});
+
+test('a new page has no main version, so its FAILs block', () => {
+  const dir = repo();
+  git(dir, 'branch', 'main');
+  fs.copyFileSync(path.join(FIXTURE, 'src/content/docs/guide/no-lede.md'), PAGE(dir, 'brand-new.md'));
+  git(dir, 'add', '-A');
+  assert.match(denied(gate(dir, 'git commit -m x')) ?? '', /brand-new\.md.* D3/);
+});
+
+test('the deny counts files, not touched pages', () => {
+  const dir = repo();
+  fs.copyFileSync(path.join(FIXTURE, 'src/content/docs/guide/no-lede.md'), PAGE(dir, 'bad.md'));
+  fs.writeFileSync(PAGE(dir, 'bad.md'), fs.readFileSync(PAGE(dir, 'bad.md'), 'utf8').replace(/^description:.*\n/m, ''));
+  const c = PAGE(dir, 'clean-howto.md'); fs.writeFileSync(c, fs.readFileSync(c, 'utf8').replace('**Next:**', 'x\n\n**Next:**'));
+  git(dir, 'add', '-A');
+  const reason = denied(gate(dir, 'git commit -m x')) ?? '';
+  assert.match(reason, /^docs gate: \d+ FAILs? in 1 file\n/);
+});
+
+test('an allow tells the agent what the gate saw, and the decision is logged with the tree', () => {
+  const dir = repo();
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-data-'));
+  const p = PAGE(dir, 'clean-howto.md');
+  fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace('**Next:**', 'One more line.\n\n**Next:**'));
+  git(dir, 'add', '-A');
+  const o = gate(dir, 'git commit -m x', { CLAUDE_PLUGIN_DATA: data });
+  assert.match(o.hookSpecificOutput.additionalContext, /^docs gate: ✓ 1 page · 0 fail/);
+  const log = fs.readFileSync(path.join(data, 'gate-log.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  assert.equal(log.at(-1).decision, 'allow');
+  assert.equal(log.at(-1).tree, git(dir, 'write-tree').trim());
+  const s = gate(dir, 'DOCS_GATE=skip git commit -m x', { CLAUDE_PLUGIN_DATA: data });
+  assert.match(s.hookSpecificOutput.additionalContext, /nothing was checked/);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(data, 'gate-log.jsonl'), 'utf8').trim().split('\n').at(-1)).decision, 'skip');
+});
+
+test('git by absolute path or inside bash -c is gated too', () => {
+  const dir = repo();
+  fs.copyFileSync(path.join(FIXTURE, 'src/content/docs/guide/no-lede.md'), PAGE(dir, 'abs.md'));
+  git(dir, 'add', '-A');
+  const gitPath = spawnSync('sh', ['-c', 'command -v git'], { encoding: 'utf8' }).stdout.trim();
+  assert.match(denied(gate(dir, `${gitPath} commit -m x`)) ?? '', /D3/);
+  assert.match(denied(gate(dir, 'bash -c "git commit -m x"')) ?? '', /D3/);
+});
+
+test('a deny also lists what was downgraded; retiring a page reports the media it orphans', () => {
+  const dir = repo();
+  git(dir, 'branch', 'main');
+  // clean-howto is the only page that shows /guide/pic.png; retire it without touching the nav
+  git(dir, 'rm', '-q', 'src/content/docs/guide/clean-howto.md');
+  const nd = PAGE(dir, 'no-desc.md');   // old D1 debt on main, receives the redirect
+  fs.writeFileSync(nd, fs.readFileSync(nd, 'utf8').replace("slug: 'guide/no-desc'\n", "slug: 'guide/no-desc'\nredirect_from:\n  - /guide/clean-howto/\n"));
+  git(dir, 'add', '-A');
+  const reason = denied(gate(dir, 'git commit -m x')) ?? '';
+  assert.match(reason, /navigation\.yml still lists \/guide\/clean-howto\//);
+  assert.match(reason, /Also \(not blocking\):[\s\S]*D1 .*already on main/);
+  assert.match(reason, /public\/guide\/pic\.png is referenced by no page any more/);
+});
+
+test('for git commit -a the log records the tree the commit will have', () => {
+  const dir = repo();
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-data-'));
+  const p = PAGE(dir, 'clean-howto.md');
+  fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace('**Next:**', 'One more line.\n\n**Next:**'));   // unstaged
+  assert.equal(denied(gate(dir, 'git commit -am x', { CLAUDE_PLUGIN_DATA: data })), null);
+  git(dir, 'commit', '-q', '-am', 'x');
+  const entry = JSON.parse(fs.readFileSync(path.join(data, 'gate-log.jsonl'), 'utf8').trim().split('\n').at(-1));
+  assert.equal(entry.scope, 'worktree');
+  assert.equal(entry.tree, git(dir, 'rev-parse', 'HEAD^{tree}').trim());
+  assert.equal(git(dir, 'status', '--porcelain').trim(), '', 'the real index was not touched beyond the commit');
+});
+
+test('an amend is judged against the parent, and every decision is logged', () => {
+  const dir = repo();
+  const data = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-data-'));
+  fs.copyFileSync(path.join(FIXTURE, 'src/content/docs/guide/no-lede.md'), PAGE(dir, 'amended.md'));
+  git(dir, 'add', '-A'); git(dir, 'commit', '-q', '-m', 'sneaked in');   // committed outside the gate
+  // nothing staged: the amend still carries amended.md, so it is judged
+  assert.match(denied(gate(dir, 'git commit --amend --no-edit', { CLAUDE_PLUGIN_DATA: data })) ?? '', /amended\.md.* D3/);
+  // a commit with no docs change is allowed and still logged
+  fs.writeFileSync(path.join(dir, 'README.txt'), 'x\n'); git(dir, 'add', 'README.txt');
+  assert.equal(denied(gate(dir, 'git commit -m readme', { CLAUDE_PLUGIN_DATA: data })), null);
+  const last = JSON.parse(fs.readFileSync(path.join(data, 'gate-log.jsonl'), 'utf8').trim().split('\n').at(-1));
+  assert.equal(last.decision, 'allow');
+  assert.equal(last.note, 'no docs change');
+});
+
+test('a cd before the commit is followed, so the gate runs on that checkout', () => {
+  const dir = repo();
+  fs.copyFileSync(path.join(FIXTURE, 'src/content/docs/guide/no-lede.md'), PAGE(dir, 'cd.md'));
+  git(dir, 'add', '-A');
+  const input = JSON.stringify({ tool_name: 'Bash', tool_input: { command: `cd ${dir} && git commit -m x` }, cwd: os.tmpdir() });
+  const r = spawnSync(process.execPath, [GATE], { cwd: os.tmpdir(), input, encoding: 'utf8', env: GIT_ENV });
+  assert.match(denied(JSON.parse(r.stdout || 'null')) ?? '', /cd\.md.* D3/);
+});
+
+test('a dist/ older than the sources turns link blockers into a rebuild WARN', () => {
+  const dir = repo();
+  fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'scripts', 'convert-nav.mjs'), '');
+  const stub = '<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=/guide/"></head><body></body></html>';
+  fs.mkdirSync(path.join(dir, 'dist', 'guide', 'clean-howto'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'dist', 'guide', 'clean-howto', 'index.html'), stub);
+  fs.writeFileSync(path.join(dir, 'dist', 'index.html'), '<html></html>');
+  git(dir, 'add', '-A'); git(dir, 'commit', '-q', '-m', 'build'); git(dir, 'branch', '-f', 'main');
+  const old = new Date(Date.now() - 3600e3);
+  fs.utimesSync(path.join(dir, 'dist', 'index.html'), old, old);
+  fs.appendFileSync(PAGE(dir, 'clean-howto.md'), '\n');
+  git(dir, 'add', '-A');
+  const stale = gate(dir, 'git commit -m x');
+  assert.equal(denied(stale), null, 'stale build: no deny');
+  assert.match(stale.hookSpecificOutput?.additionalContext ?? '', /dist\/ is older than the sources/);
+  const now = new Date(Date.now() + 60e3);
+  fs.utimesSync(path.join(dir, 'dist', 'index.html'), now, now);
+  assert.match(denied(gate(dir, 'git commit -m x')) ?? '', /links: /, 'fresh build: the blocker denies');
+});
+
+test("a retired page's own old URLs must stay in some redirect_from", () => {
+  const dir = repo();
+  const nd = PAGE(dir, 'no-desc.md');
+  fs.writeFileSync(nd, fs.readFileSync(nd, 'utf8').replace("slug: 'guide/no-desc'\n", "slug: 'guide/no-desc'\nredirect_from:\n  - /guide/ancient/\n"));
+  git(dir, 'add', '-A'); git(dir, 'commit', '-q', '-m', 'old url'); git(dir, 'branch', '-f', 'main');
+  const p = PAGE(dir, 'clean-howto.md');
+  fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace('[No description →](/guide/no-desc/)', '[Guide →](/guide/)')
+    .replace("slug: 'guide/clean-howto'\n", "slug: 'guide/clean-howto'\nredirect_from:\n  - /guide/no-desc/\n"));
+  const nav = path.join(dir, '_data', 'navigation.yml');
+  fs.writeFileSync(nav, fs.readFileSync(nav, 'utf8').replace(/ *- url: \/guide\/no-desc\/\n *title: No description\n/, ''));
+  git(dir, 'rm', '-q', 'src/content/docs/guide/no-desc.md'); git(dir, 'add', '-A');
+  assert.match(denied(gate(dir, 'git commit -m "retire"')) ?? '', /its own old URL \/guide\/ancient\/ is no longer in any redirect_from/);
+  fs.writeFileSync(p, fs.readFileSync(p, 'utf8').replace('  - /guide/no-desc/\n', '  - /guide/no-desc/\n  - /guide/ancient/\n'));
+  git(dir, 'add', '-A');
+  assert.equal(denied(gate(dir, 'git commit -m "retire"')), null);
+});
+
+test('a page whose lines changed only in their line endings is denied (G2, G5)', () => {
+  const dir = repo();
+  const p = PAGE(dir, 'clean-howto.md');
+  const t = fs.readFileSync(p, 'utf8');
+  fs.writeFileSync(p, t.replace(/\n/g, '\r\n').replace('\r\n\r\n', '\r\n\r\nOne real new line.\r\n\r\n'));
+  git(dir, 'add', '-A');
+  assert.match(denied(gate(dir, 'git commit -m x')) ?? '', /changed only in their line endings/);
+  fs.writeFileSync(p, t.replace('\n\n', '\n\nOne real new line.\n\n'));
+  git(dir, 'add', '-A');
+  assert.doesNotMatch(denied(gate(dir, 'git commit -m x')) ?? '', /line endings/);
+});
+
+test('`git commit -m "msg" <paths>` logs the tree the commit records, and gate-verdict finds it in any keboola-docs-* log', () => {
+  const dir = repo();
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-home-'));
+  const data = path.join(home, '.claude', 'plugins', 'data', 'keboola-docs-inline');   // not the marketplace id
+  fs.appendFileSync(PAGE(dir, 'clean-howto.md'), '\nOne more line.\n');
+  const cmd = 'git commit -m "touch the page" src/content/docs/guide/clean-howto.md';
+  assert.equal(denied(gate(dir, cmd, { CLAUDE_PLUGIN_DATA: data })), null);
+  git(dir, 'commit', '-q', '-m', 'touch the page', 'src/content/docs/guide/clean-howto.md');
+  const head = git(dir, 'rev-parse', 'HEAD^{tree}').trim();
+  const logged = fs.readFileSync(path.join(data, 'gate-log.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l)).pop();
+  assert.equal(logged.tree, head, 'the message is not a pathspec: the logged tree is the committed one');
+  const v = spawnSync(process.execPath, [path.join(HERE, 'gate-verdict.mjs'), dir], { encoding: 'utf8', env: { ...process.env, HOME: home, CLAUDE_PLUGIN_DATA: '' } });
+  assert.equal(v.status, 0, v.stdout + v.stderr);
+  assert.match(v.stdout, /gate allow/);
+  fs.appendFileSync(PAGE(dir, 'clean-howto.md'), '\nUnjudged.\n');
+  git(dir, 'commit', '-q', '-am', 'bypass');
+  const none = spawnSync(process.execPath, [path.join(HERE, 'gate-verdict.mjs'), dir], { encoding: 'utf8', env: { ...process.env, HOME: home, CLAUDE_PLUGIN_DATA: '' } });
+  assert.equal(none.status, 1);
+  assert.match(none.stdout, /bypassed the gate/);
 });

@@ -85,3 +85,18 @@ test('--index reads what is staged, not the working tree', () => {
   assert.equal(idx.source, 'index');
   assert.ok(idx.unreferenced.includes('guide/orphan.png'), 'the index does not');
 });
+
+test('--twins lists byte-identical tracked media under src and public', () => {
+  const dir = repo();
+  fs.writeFileSync(path.join(dir, 'public', 'guide', 'pic.png'), 'same bytes');
+  fs.writeFileSync(path.join(dir, 'src', 'content', 'docs', 'guide', 'pic.png'), 'same bytes');
+  fs.writeFileSync(path.join(dir, 'public', 'guide', 'other.png'), 'other bytes');
+  fs.writeFileSync(path.join(dir, 'public', 'guide', 'other-copy.png'), 'other bytes');
+  const env = { ...process.env, GIT_AUTHOR_NAME: 't', GIT_AUTHOR_EMAIL: 't@t', GIT_COMMITTER_NAME: 't', GIT_COMMITTER_EMAIL: 't@t' };
+  spawnSync('git', ['init', '-q'], { cwd: dir, env }); spawnSync('git', ['add', '-A'], { cwd: dir, env });
+  const { out } = run(dir, '--twins', 'src/content/docs/guide/clean-howto.md');
+  assert.ok(out.twins.some((g) => g.join() === 'public/guide/pic.png,src/content/docs/guide/pic.png'));
+  assert.ok(!out.twins.some((g) => g.includes('public/guide/other.png')), 'only sets holding the page\'s own media');
+  const all = run(dir, '--twins', '--all', 'src/content/docs/guide/clean-howto.md').out;
+  assert.ok(all.twins.some((g) => g.includes('public/guide/other.png')), '--all lists every set');
+});

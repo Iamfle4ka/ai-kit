@@ -15,6 +15,7 @@
 // It never touches dist/. Run docs-link-redirect-check afterwards; the commit gate checks the redirect.
 import fs from 'node:fs';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { pageRefs } from './lib/media-refs.mjs';
 
 const args = process.argv.slice(2);
@@ -46,22 +47,36 @@ const splitFm = (text) => { const m = text.match(/^(---\r?\n)([\s\S]*?)(\r?\n---
 const redirectsIn = (fmText) => { const m = fmText.match(/^redirect_from:[ \t]*(\[.*\])?\s*$((?:\r?\n[ \t]+-[ \t]+.*)*)/m); if (!m) return []; const out = []; if (m[1]) out.push(...m[1].slice(1, -1).split(',').map((s) => s.trim().replace(/^['"]|['"]$/g, '')).filter(Boolean)); for (const l of (m[2] ?? '').split(/\r?\n/)) { const x = l.match(/^[ \t]+-[ \t]+(.*)$/); if (x) out.push(x[1].trim().replace(/^['"]|['"]$/g, '')); } return out; };
 const withRedirects = (fmText, urls) => {
   const existing = redirectsIn(fmText).map(norm); const add = urls.map(norm).filter((u) => !existing.includes(u)); if (!add.length) return { fm: fmText, added: [] };
-  const all = [...existing, ...add]; const block = 'redirect_from:\n' + all.map((u) => `  - ${u}`).join('\n');
   const re = /^redirect_from:[ \t]*(\[.*\])?\s*$((?:\r?\n[ \t]+-[ \t]+.*)*)/m;
-  return { fm: re.test(fmText) ? fmText.replace(re, block) : fmText.replace(/\s*$/, '') + '\n' + block, added: add };
+  const m = fmText.match(re);
+  if (m && !m[1]) {                                  // block list: keep its lines as they are, add in its indent
+    const ind = (m[2].match(/\n([ \t]+)-/) ?? [null, '  '])[1];
+    return { fm: fmText.replace(re, (all) => all + add.map((u) => `\n${ind}- ${u}`).join('')), added: add };
+  }
+  const block = 'redirect_from:\n' + [...existing, ...add].map((u) => `  - ${u}`).join('\n');
+  return { fm: m ? fmText.replace(re, block) : fmText.replace(/\s*$/, '') + '\n' + block, added: add };
 };
 const fromText = read(fromFile); const fromParts = splitFm(fromText) ?? die(`${rel(fromFile)} has no frontmatter`);
+const fromTitle = (fromParts.fm.match(/^title:\s*['"]?(.*?)['"]?\s*$/m) ?? [null, FROM.split('/').filter(Boolean).pop()])[1];
+// The target may already have a section on the retired page ("## 6 AI Rules" for AI Rules, V10):
+// a merge folds into the end of that section instead of adding a second heading.
+const key = (t) => t.toLowerCase().replace(/^[\d.\s]+/, '').replace(/[^a-z0-9]+/g, ' ').trim();
+const own = MERGE && toFile ? [...read(toFile).replace(/\r\n/g, '\n').matchAll(/^(#{2,3}) (.+)$/gm)].find((m) => key(m[2]) === key(fromTitle)) : null;
+const sectionId = (own ? own[2] : fromTitle).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-');
 const carried = redirectsIn(fromParts.fm).map(norm);
 const result = { from: FROM, fromFile: rel(fromFile), to: TO ?? RENAME, mode: RENAME ? 'rename' : MERGE ? 'merge' : 'delete', redirectsAdded: [], navChanged: false, linksRewritten: [], orphanMedia: [], dryRun: DRY };
 // ---- inbound links ------------------------------------------------------------------------------------
 const NEW = TO ?? RENAME;
-const esc = FROM.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
-const linkRe = new RegExp(`(?<=[("'\`\\s=])${esc}(?=[)"'\`\\s#?]|$)`, 'g');
+// with or without the trailing slash: `(/management/project/ai-rules)` was missed (V10)
+const esc = FROM.slice(0, -1).replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
+const linkRe = new RegExp(`(?<=[("'\`\\s=])${esc}/?(?=[)"'\`\\s#?]|$)`, 'g');
 const walk = (d, out = []) => { for (const e of fs.readdirSync(d, { withFileTypes: true })) { const p = path.join(d, e.name); if (e.isDirectory()) { if (e.name !== 'node_modules') walk(p, out); } else if (/\.(md|mdx|astro|mjs|js|ts|yml|yaml|json)$/.test(e.name)) out.push(p); } return out; };
 for (const f of [...walk(path.join(ROOT, 'src')), ...(fs.existsSync(path.join(ROOT, '_data')) ? walk(path.join(ROOT, '_data')) : [])]) {
   if (f === fromFile || f === NAV) continue;
   const t = writes.get(f) ?? read(f);
-  let n = 0; const u = t.replace(linkRe, () => { n++; return NEW; });
+  // On a merge the target's own links to the retired page would point at itself: send them to the folded section.
+  const repl = MERGE && f === toFile ? `#${sectionId}` : NEW;
+  let n = 0; const u = t.replace(linkRe, () => { n++; return repl; });
   if (!n) continue;
   // redirect_from entries must keep the OLD url: undo the rewrite inside the frontmatter list
   const parts = splitFm(u); const fixed = parts && /redirect_from/.test(parts.fm) ? parts.open + parts.fm.replace(new RegExp(`(-\\s+)${NEW.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')}`, 'g'), (x, p) => p + FROM) + parts.close + parts.body : u;
@@ -76,9 +91,26 @@ if (TO) {
   const { fm, added } = withRedirects(parts.fm, [FROM, ...carried]); result.redirectsAdded = added;
   let body = parts.body;
   if (MERGE) {
-    const fromBody = fromParts.body.replace(/^\s+/, '');
-    const note = `\n<!-- TEMPLATE: folded in from ${FROM} by docs-retire. Keep what this page lacks, delete the rest, one type per page (D8). -->\n\n${fromBody.replace(/\n\*\*Next:\*\*[^\n]*\n?\s*$/, '\n')}`;
-    const i = body.search(/\n\*\*Next:\*\*/); body = i >= 0 ? body.slice(0, i) + '\n' + note + body.slice(i) : body.replace(/\s*$/, '\n') + note;
+    const EOL = /\r\n/.test(body) ? '\r\n' : '\n';   // a CRLF target stays CRLF (V10)
+    const lf = body.replace(/\r\n/g, '\n');
+    const fromBody = fromParts.body.replace(/\r\n/g, '\n').replace(/^\s+/, '').replace(/\n\*\*Next:\*\*[^\n]*\n?\s*$/, '\n').replace(/\s*$/, '\n');
+    const tnote = `<!-- TEMPLATE: folded in from ${FROM} by docs-retire. Keep what this page lacks, delete the rest, one type per page (D8). -->`;
+    const mine = own && [...lf.matchAll(/^(#{2,3}) (.+)$/gm)].find((m) => key(m[2]) === key(fromTitle));
+    let out;
+    if (mine) {
+      const after = mine.index + mine[0].length;
+      const next = lf.slice(after).search(new RegExp(`\\n#{2,${mine[1].length}} |\\n\\*\\*Next:\\*\\*`));
+      const at = next < 0 ? lf.length : after + next;
+      out = lf.slice(0, at).replace(/\s*$/, '\n') + `\n${tnote}\n\n${fromBody}` + lf.slice(at);
+      result.foldedInto = mine[0].trim();
+    } else {
+      const note = `\n## ${fromTitle}\n\n${tnote}\n\n${fromBody}`;
+      // before the Next footer; else before a closing Limits / Related section (limits stay last); else at the end
+      let i = lf.search(/\n\*\*Next:\*\*/);
+      if (i < 0) { const tail = [...lf.matchAll(/\n## (Limits|Related|See also)\b[^\n]*\n/g)].pop(); if (tail) i = tail.index; }
+      out = i >= 0 ? lf.slice(0, i) + '\n' + note + lf.slice(i) : lf.replace(/\s*$/, '\n') + note;
+    }
+    body = out.replace(/\n/g, EOL);
   }
   targetText = parts.open + fm + parts.close + body; write(toFile, targetText); deletes.add(fromFile);
 } else {
@@ -89,6 +121,25 @@ if (TO) {
   write(targetFile, fromParts.open + fm2 + fromParts.close + fromParts.body); deletes.add(fromFile);
 }
 result.targetFile = rel(targetFile);
+
+// ---- rename: media under the old URL move with the page --------------------------------------------------
+// public/<old slug>/x.png stayed behind on a rename and the link check flagged every reference to it (V10).
+const moves = new Map();
+result.mediaMoved = [];
+if (RENAME) {
+  const oldDir = path.join(ROOT, 'public', FROM), newDir = path.join(ROOT, 'public', RENAME);
+  if (fs.existsSync(oldDir)) for (const e of fs.readdirSync(oldDir, { withFileTypes: true })) if (e.isFile()) moves.set(path.join(oldDir, e.name), path.join(newDir, e.name));
+  if (/\/index\.mdx?$/.test(fromFile))                 // files next to an index page (relative refs keep working)
+    for (const e of fs.readdirSync(path.dirname(fromFile), { withFileTypes: true })) if (e.isFile() && !/\.mdx?$/.test(e.name)) moves.set(path.join(path.dirname(fromFile), e.name), path.join(path.dirname(targetFile), e.name));
+  const urlMoves = [...moves.keys()].filter((f) => f.startsWith(oldDir)).map((f) => [FROM + path.basename(f), RENAME + path.basename(f)]);
+  if (urlMoves.length) for (const f of [...walk(path.join(ROOT, 'src')), ...writes.keys()]) {
+    if (f === fromFile || !fs.existsSync(f) && !writes.has(f)) continue;
+    let t = writes.get(f) ?? read(f), n = 0;
+    for (const [a, b] of urlMoves) t = t.split(a).join(b), n += (writes.get(f) ?? read(f)).split(a).length - 1;
+    if (n) write(f, t);
+  }
+  for (const [a, b] of moves) result.mediaMoved.push(`${rel(a)} → ${rel(b)}`);
+}
 
 // ---- nav --------------------------------------------------------------------------------------------
 if (fs.existsSync(NAV)) {
@@ -110,7 +161,8 @@ if (fromMedia.size) {
   const others = new Set();
   for (const f of walkPages(DOCS)) { if (f === fromFile) continue; for (const m of publicRefs(f, writes.get(f) ?? read(f))) others.add(m); }
   if (MERGE && targetText) for (const m of publicRefs(targetFile, targetText)) others.add(m);
-  for (const m of fromMedia) if (!others.has(m)) { const p = path.join(ROOT, m); if (fs.existsSync(p)) { result.orphanMedia.push(m); if (DEL_ORPHANS) deletes.add(p); } }
+  if (RENAME) for (const m of publicRefs(targetFile, writes.get(targetFile) ?? fromText)) others.add(m);   // the page moved, its media did not
+  for (const m of fromMedia) if (!others.has(m) && !moves.has(path.join(ROOT, m))) { const p = path.join(ROOT, m); if (fs.existsSync(p)) { result.orphanMedia.push(m); if (DEL_ORPHANS) deletes.add(p); } }
 }
 // Relative refs resolve against the page's folder and URL: a merge or a rename moves the text, so they can break.
 result.relativeRefs = [];
@@ -121,6 +173,12 @@ function walkPages(d, out = []) { for (const e of fs.readdirSync(d, { withFileTy
 if (!DRY) {
   for (const [p, s] of writes) { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, s); }
   for (const p of deletes) fs.rmSync(p, { force: true });
+  for (const [a, b] of moves) { fs.mkdirSync(path.dirname(b), { recursive: true }); fs.renameSync(a, b); }
+  // The sidebar is generated from the nav; no Write/Edit hook fires for this script's own writes.
+  if (result.navChanged && fs.existsSync(path.join(ROOT, 'scripts', 'convert-nav.mjs'))) {
+    const g = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'convert-nav.mjs')], { cwd: ROOT, encoding: 'utf8' });
+    result.sidebarRegenerated = g.status === 0;
+  }
 }
 result.deleted = [...deletes].map(rel);
 if (JSON_OUT) console.log(JSON.stringify(result, null, 2));
@@ -129,6 +187,7 @@ else {
   console.log(`  redirect_from on ${result.targetFile}: ${result.redirectsAdded.length ? result.redirectsAdded.join(', ') : 'already present'}`);
   console.log(`  nav: ${result.navChanged ? (RENAME ? 'url re-pointed' : 'entry removed') : 'no entry found (check _data/navigation.yml by hand)'}`);
   for (const l of result.linksRewritten) console.log(`  links: ${l.file} (${l.count})`);
+  for (const m of result.mediaMoved) console.log(`  moved: ${m}`);
   for (const d of result.deleted) console.log(`  ${DEL_ORPHANS && d.startsWith('public/') ? 'deleted media' : 'deleted'}: ${d}`);
   if (result.relativeRefs.length) console.log(`  relative media refs move with the text, check them on the target: ${result.relativeRefs.join(', ')}`);
   if (result.orphanMedia.length && !DEL_ORPHANS) console.log(`  media only this page used (delete if nothing keeps it): ${result.orphanMedia.join(', ')}`);
