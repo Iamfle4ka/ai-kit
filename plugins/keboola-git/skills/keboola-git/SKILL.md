@@ -25,10 +25,10 @@ All `git` and `kbagent` operations run from the **user's project root** or a **s
 
 ## Prerequisites
 
-1. **kbagent installed** and on `PATH` (`kbagent --version`). Install: see the kbagent docs / `kbagent:kbagent` skill.
+1. **kbagent installed** and on `PATH` (`kbagent --version`). Install the `kbagent` plugin from this marketplace with `/plugin install kbagent@keboola-claude-kit`, then run `/kbagent:setup` to install the CLI. Usage: the `kbagent:kbagent` skill.
 2. **Project registered** with kbagent (one-time per project):
    ```bash
-   kbagent --json project add --project <alias> --stack <stack-url> --storage-token "$KBC_TOKEN"
+   kbagent --json project add --project <alias> --url <stack-url> --token-env KBC_TOKEN
    ```
 3. **Conversation id** exported once per shell session:
    ```bash
