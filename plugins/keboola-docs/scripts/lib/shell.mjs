@@ -28,15 +28,27 @@ export function stripHeredocs(cmd) {
   return out.join('\n');
 }
 
-// Split into simple commands, each a list of words with quotes removed.
+// Split into simple commands, each a list of words with quotes removed. Redirections (`<<'EOF'`,
+// `< msg.txt`, `2>&1`, `&> log`) and their targets are dropped: they are not arguments, and a
+// `git commit -F - <<'EOF'` whose `<<EOF` was read as a pathspec logged no tree, so every such
+// commit looked like it had bypassed the gate (found 2026-10-27).
+const REDIRECT = /^(?:&>>|&>|<<<|<<-|<<|<>|<&|>&|>>|>\||<|>)/;
 export function splitCommands(cmd) {
   const s = stripHeredocs(cmd);
   const cmds = [];
-  let words = [], word = '', inWord = false;
-  const endWord = () => { if (inWord) words.push(word); word = ''; inWord = false; };
-  const endCmd = () => { endWord(); if (words.length) cmds.push(words); words = []; };
+  let words = [], word = '', inWord = false, dropNext = false;
+  const endWord = () => { if (inWord) { if (dropNext) dropNext = false; else words.push(word); } word = ''; inWord = false; };
+  const endCmd = () => { endWord(); dropNext = false; if (words.length) cmds.push(words); words = []; };
   for (let i = 0; i < s.length; i++) {
     const c = s[i];
+    const op = (c === '<' || c === '>' || (c === '&' && s[i + 1] === '>')) && s.slice(i).match(REDIRECT);
+    if (op) {
+      if (inWord && /^\d+$/.test(word)) { word = ''; inWord = false; } else endWord();   // `2>`: the fd is not a word
+      i += op[0].length - 1;
+      if (op[0].endsWith('&')) { const t = s.slice(i + 1).match(/^(\d+|-)/); if (t) { i += t[0].length; continue; } }
+      dropNext = true;
+      continue;
+    }
     if (c === "'") { const j = s.indexOf("'", i + 1); const e = j < 0 ? s.length : j; word += s.slice(i + 1, e); inWord = true; i = e; continue; }
     if (c === '"') {
       let j = i + 1, buf = '';
@@ -99,49 +111,51 @@ function segOf(argv) {
   return { argv: rest, env, git };
 }
 
-// Flags of `git commit` that take the next word as their value.
-const COMMIT_VALUE_FLAGS = new Set(['-m', '--message', '-F', '--file', '-C', '--reuse-message', '-c', '--reedit-message',
-  '-t', '--template', '--author', '--date', '--cleanup', '--fixup', '--squash', '--trailer', '--pathspec-from-file']);
+// Long flags of `git commit` that take the next word as their value (or `--flag=value`).
+const COMMIT_VALUE_FLAGS = new Set(['--message', '--file', '--reuse-message', '--reedit-message', '--template',
+  '--author', '--date', '--cleanup', '--fixup', '--squash', '--trailer', '--pathspec-from-file']);
+// Short flags that take a value: attached (`-mfix`) or the next word (`-m fix`).
+const SHORT_VALUE = new Set(['m', 'F', 'C', 'c', 't']);
 
-// What a `git commit` will record: -a/--all stages tracked changes, pathspecs commit those paths
-// from the working tree; either way the index alone is not what lands.
-export function commitScope(args) {
-  let all = false, paths = false, afterDashDash = false;
-  for (let i = 0; i < args.length; i++) {
-    const a = args[i];
-    if (afterDashDash) { paths = true; continue; }
-    if (a === '--') { afterDashDash = true; continue; }
-    if (a === '--all') { all = true; continue; }
-    if (/^--[a-z-]+=/.test(a)) continue;
-    if (COMMIT_VALUE_FLAGS.has(a)) { i++; continue; }
-    if (/^-[A-Za-z]+$/.test(a)) {                  // short cluster: -am "msg", -sm "msg", -a
-      if (a.includes('a')) all = true;
-      if (/[mFCct]$/.test(a)) i++;                 // the last short flag takes the next word
-      continue;
-    }
-    if (a.startsWith('-')) continue;
-    paths = true;
-  }
-  return { all, paths };
-}
-
-// The pathspecs of a `git commit`: what `commit <paths>` records from the working tree. Values of
-// flags (`-m "msg"`) are not paths: taking them as paths made the gate log HEAD's tree for every
-// `git commit -m "…" <files>` (human test, 2026-10-21).
-export function commitPaths(args) {
-  const out = [];
+// What a `git commit` will record, from its arguments:
+//   all          -a/--all: tracked working-tree changes are staged first
+//   include      -i/--include: pathspecs are added on top of the index (default: --only, HEAD + paths)
+//   paths        the pathspecs; values of flags (`-m "msg"`, `-mfix`) are not paths. Taking a message
+//                as a path made the gate log HEAD's tree (human test, 2026-10-21)
+//   pathspecFile --pathspec-from-file's value ('-' = stdin); the paths are in that file
+//   nul          --pathspec-file-nul
+export function parseCommit(args) {
+  const r = { all: false, include: false, paths: [], pathspecFile: null, nul: false };
   let afterDashDash = false;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
-    if (afterDashDash) { out.push(a); continue; }
+    if (afterDashDash) { r.paths.push(a); continue; }
     if (a === '--') { afterDashDash = true; continue; }
-    if (/^--[a-z-]+=/.test(a)) continue;
-    if (COMMIT_VALUE_FLAGS.has(a)) { i++; continue; }
-    if (/^-[A-Za-z]+$/.test(a)) { if (/[mFCct]$/.test(a)) i++; continue; }
+    if (a === '--all') { r.all = true; continue; }
+    if (a === '--include') { r.include = true; continue; }
+    if (a === '--pathspec-file-nul') { r.nul = true; continue; }
+    const eq = a.match(/^(--[a-z-]+)=([\s\S]*)$/);
+    if (eq) { if (eq[1] === '--pathspec-from-file') r.pathspecFile = eq[2]; continue; }
+    if (COMMIT_VALUE_FLAGS.has(a)) { if (a === '--pathspec-from-file') r.pathspecFile = args[i + 1] ?? null; i++; continue; }
+    if (/^-[A-Za-z]/.test(a) && !a.startsWith('--')) {   // a short cluster: -a, -am "msg", -mfix, -sm msg
+      for (let k = 1; k < a.length; k++) {
+        const c = a[k];
+        if (SHORT_VALUE.has(c)) { if (k === a.length - 1) i++; break; }   // the rest, or the next word, is the value
+        if (c === 'a') r.all = true;
+        if (c === 'i') r.include = true;
+      }
+      continue;
+    }
     if (a.startsWith('-')) continue;
-    out.push(a);
+    r.paths.push(a);
   }
-  return out;
+  return r;
+}
+
+// -a/--all or pathspecs: the commit takes working-tree content, so the index alone is not what lands.
+export function commitScope(args) {
+  const c = parseCommit(args);
+  return { all: c.all, paths: c.paths.length > 0 || c.pathspecFile !== null };
 }
 
 export const STAGING = new Set(['add', 'rm', 'mv', 'stage', 'restore', 'apply', 'update-index']);

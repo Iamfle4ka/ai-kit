@@ -37,7 +37,7 @@ Run through this every time. Each line is here because it went wrong once.
       checked, not assumed.
 - [ ] Poster is the most informative frame, and it is a real file — a missing poster shows a black
       rectangle until the video decodes.
-- [ ] Bright: `"${CLAUDE_PLUGIN_ROOT}/scripts/checker/clip_metrics.sh" <clip> <poster> <out>` reports luma mean
+- [ ] Bright: `"${CLAUDE_PLUGIN_ROOT}/scripts/checker/clip_metrics.sh" [--states] <clip> <poster> <out>` reports luma mean
       at least 200, no frame under 180, and a bright poster.
 - [ ] Captions at least 24 px on a 1280 canvas: the page column is 713 px, so that renders at 13 px
       (`clip_metrics.sh` prints the scale; `--page-width` overrides the column).

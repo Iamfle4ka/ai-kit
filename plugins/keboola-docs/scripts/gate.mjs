@@ -16,15 +16,15 @@
 // A FAIL that the same page already had on the merge-base with main is reported as a WARN ("already on
 // main"): touching a page for one link must not drag its old form debt into the change. D9 (VERIFY
 // owners) and D16 (template leftovers) are never downgraded.
-// Every decision is appended to ${CLAUDE_PLUGIN_DATA}/gate-log.jsonl with the tree it judged, so
-// docs-ship can tell whether HEAD went through the gate.
+// Every decision is appended to <git common dir>/keboola-docs/gate-log.jsonl (and ${CLAUDE_PLUGIN_DATA}/gate-log.jsonl)
+// with the tree it judged, so docs-ship can tell whether HEAD went through the gate.
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { makeSource } from './lib/source.mjs';
 import { pageRefs } from './lib/media-refs.mjs';
-import { segments, commitScope, STAGING, commitPaths } from './lib/shell.mjs';
+import { segments, parseCommit, STAGING } from './lib/shell.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DIATAXIS = path.join(HERE, '..', 'skills', 'docs-diataxis-check', 'scripts', 'check.mjs');
@@ -70,13 +70,14 @@ const branch = git(['rev-parse', '--abbrev-ref', 'HEAD']).stdout?.trim() || null
 // The tree the commit will record: the index, or for -a / pathspecs the same thing git builds,
 // done in a throwaway index so the real one is untouched.
 let commitTree = () => git(['write-tree']).stdout?.trim() || null;
+// The log lives in the repo's git dir (shared by its worktrees, never committed), so whichever way the
+// plugin was loaded, gate-verdict finds it next to the commit. The plugin data dir keeps a copy.
+const commonDir = git(['rev-parse', '--git-common-dir']).stdout?.trim();
+const logDirs = [commonDir && path.join(path.resolve(cwd, commonDir), 'keboola-docs'), process.env.CLAUDE_PLUGIN_DATA].filter(Boolean);
 const logDecision = (decision, extra = {}) => {
-  const dir = process.env.CLAUDE_PLUGIN_DATA;
-  if (!dir) return;
   try {
-    const tree = commitTree();
-    fs.mkdirSync(dir, { recursive: true });
-    fs.appendFileSync(path.join(dir, 'gate-log.jsonl'), JSON.stringify({ at: new Date().toISOString(), repo: root, branch, tree, decision, ...extra }) + '\n');
+    const line = JSON.stringify({ at: new Date().toISOString(), repo: root, branch, tree: commitTree(), decision, ...extra }) + '\n';
+    for (const dir of logDirs) { fs.mkdirSync(dir, { recursive: true }); fs.appendFileSync(path.join(dir, 'gate-log.jsonl'), line); }
   } catch { /* the log is a convenience, never a reason to fail */ }
 };
 
@@ -103,8 +104,15 @@ if (stagesFirst) {
 
 // ---- staged set --------------------------------------------------------------------------------
 // `git commit -a` / `--all` / `-am` and `git commit <paths>` take working-tree content at commit time.
-const scope = commitScope(commitSeg.git.args);
-const ALL = scope.all || scope.paths;
+const scope = parseCommit(commitSeg.git.args);
+// --pathspec-from-file: the paths are in a file ('-' is stdin, which the gate cannot read: no tree is logged)
+if (scope.pathspecFile !== null && scope.pathspecFile !== '-') {
+  try {
+    const list = fs.readFileSync(path.resolve(cwd, scope.pathspecFile), 'utf8');
+    scope.paths.push(...list.split(scope.nul ? '\0' : /\r?\n/).filter(Boolean));
+  } catch { /* unreadable: git will fail the commit itself */ }
+}
+const ALL = scope.all || scope.paths.length > 0 || scope.pathspecFile !== null;
 // --amend replaces HEAD, so the change to judge is everything since HEAD's parent, not just what is
 // staged on top of HEAD (an amend with nothing staged used to pass unjudged and unlogged).
 const AMEND = commitSeg.git.args.includes('--amend') && git(['rev-parse', '-q', '--verify', 'HEAD^']).status === 0;
@@ -115,7 +123,12 @@ if (ALL) commitTree = () => {
   const g = (args) => spawnSync('git', args, { cwd, encoding: 'utf8', env });
   try {
     if (scope.all) { fs.copyFileSync(path.resolve(cwd, git(['rev-parse', '--git-path', 'index']).stdout.trim()), tmp); g(['add', '-u']); }
-    else { g(['read-tree', 'HEAD']); const added = g(['add', '--', ...commitPaths(commitSeg.git.args)]); if (added.status !== 0) return null; }
+    else {
+      if (scope.pathspecFile === '-') return null;
+      // --only (the default) commits HEAD plus the paths; --include adds them to the index
+      if (scope.include) fs.copyFileSync(path.resolve(cwd, git(['rev-parse', '--git-path', 'index']).stdout.trim()), tmp); else g(['read-tree', 'HEAD']);
+      if (g(['add', '--', ...scope.paths]).status !== 0) return null;
+    }
     return g(['write-tree']).stdout?.trim() || null;
   } catch { return null; } finally { fs.rmSync(path.dirname(tmp), { recursive: true, force: true }); }
 };

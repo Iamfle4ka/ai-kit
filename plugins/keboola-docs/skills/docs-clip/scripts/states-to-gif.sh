@@ -23,20 +23,26 @@ SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 SKILL_DIR="$(dirname "$SCRIPT_DIR")"   # the docs-clip skill; outputs go where the caller says, relative to the project root
 OUT="$1"; FPS="$2"; PLAN="$3"; CROP="${4:-}"
 SEQ="$(mktemp -d)"; i=0
+# A held still is N symlinks to one file: a 30 fps clip from ring-frames.py repeats a frame
+# hundreds of times, and copying each one was most of the run.
 for item in $PLAN; do
   png="${item%%:*}"; n="${item##*:}"
-  for _ in $(seq "$n"); do i=$((i+1)); cp "$png" "$SEQ/f$(printf '%04d' "$i").png"; done
+  abs="$(cd "$(dirname "$png")" && pwd)/$(basename "$png")"
+  for _ in $(seq "$n"); do i=$((i+1)); ln -s "$abs" "$SEQ/f$(printf '%04d' "$i").png"; done
 done
 CROPF=""; [ -n "$CROP" ] && CROPF="crop=${CROP#crop=},"
-case "$OUT" in
-  *.mp4)
+PAD="pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0:white"
+EXT="$(printf '%s' "${OUT##*.}" | tr '[:upper:]' '[:lower:]')"   # clip.MP4 is an MP4 too
+case "$EXT" in
+  mp4)
     # even sides for yuv420p; slow preset + crf 26 keeps UI text sharp at ~100 KB
     ffmpeg -v error -y -framerate "$FPS" -i "$SEQ/f%04d.png" \
-      -vf "${CROPF}pad=ceil(iw/2)*2:ceil(ih/2)*2:0:0:white,format=yuv420p" \
+      -vf "${CROPF}${PAD},format=yuv420p" \
       -c:v libx264 -preset slow -crf 26 -movflags +faststart -an "$OUT"
-    POSTER="${OUT%.mp4}-poster.png"
+    POSTER="${OUT%.*}-poster.png"
     first=""; for item in $PLAN; do n="${item##*:}"; if [ "$n" -gt 1 ]; then first="${item%%:*}"; break; fi; done
-    if [ -n "$CROP" ]; then ffmpeg -v error -y -i "${first:-$SEQ/f0001.png}" -vf "${CROPF%,}" "$POSTER"; else cp "${first:-$SEQ/f0001.png}" "$POSTER"; fi
+    # the same crop and even-side pad as the video, so the poster never jumps a pixel when it plays
+    ffmpeg -v error -y -i "${first:-$SEQ/f0001.png}" -vf "${CROPF}${PAD}" "$POSTER"
     ;;
   *)
     VF="${CROPF}split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];[b][p]paletteuse=dither=none:diff_mode=rectangle"

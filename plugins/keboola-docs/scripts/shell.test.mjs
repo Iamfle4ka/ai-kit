@@ -1,7 +1,7 @@
 // Tests for lib/shell.mjs, the command parser the commit gate uses. Run: npm test
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { segments, commitScope, stripHeredocs } from './lib/shell.mjs';
+import { segments, commitScope, parseCommit, stripHeredocs } from './lib/shell.mjs';
 
 const gitSubs = (cmd) => segments(cmd).filter((s) => s.git).map((s) => s.git.sub);
 
@@ -47,4 +47,18 @@ test('git by absolute path, escaped or behind env/sudo is still git', () => {
   assert.deepEqual(gitSubs('legit commit'), []);
   assert.deepEqual(gitSubs('bash -c "git add a && git commit -m x"'), ['add', 'commit']);
   assert.deepEqual(gitSubs("sh -c 'cd docs; git commit -m x'"), ['commit']);
+});
+
+test('parseCommit: attached values, pathspec files, --include, and redirections are not paths', () => {
+  const paths = (cmd) => { const [s] = segments(cmd).filter((x) => x.git?.sub === 'commit'); return parseCommit(s.git.args); };
+  assert.deepEqual(paths('git commit -mfix src/a.md').paths, ['src/a.md']);   // -mfix: the value is attached
+  assert.equal(paths('git commit -mall src/a.md').all, false);               // "all" is the message, not -a
+  assert.equal(paths('git commit -am fix').all, true);
+  assert.deepEqual(paths('git commit -m x --pathspec-from-file=list.txt').pathspecFile, 'list.txt');
+  assert.deepEqual(paths('git commit -m x --pathspec-from-file - --pathspec-file-nul'), { all: false, include: false, paths: [], pathspecFile: '-', nul: true });
+  assert.equal(paths('git commit -i -m x src/a.md').include, true);
+  assert.deepEqual(paths("git commit -q -F - <<'EOF'\nmsg\nEOF").paths, []);
+  assert.deepEqual(paths('git commit -F - < msg.txt 2>&1 | tail -1').paths, []);
+  assert.deepEqual(paths('git commit -m x src/a.md >/dev/null 2> err &> all').paths, ['src/a.md']);
+  assert.deepEqual(commitScope(['-m', 'x', '--pathspec-from-file', 'f']), { all: false, paths: true });
 });

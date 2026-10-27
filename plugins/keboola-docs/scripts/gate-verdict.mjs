@@ -4,11 +4,11 @@
 //
 //   node <plugin>/scripts/gate-verdict.mjs [<repo dir>] [--json]
 //
-// The gate appends every decision to gate-log.jsonl in the plugin's data directory, and that
-// directory depends on how the plugin was loaded: `keboola-docs-<marketplace>` when installed,
-// `keboola-docs-inline` in a session that loads it inline (human test, 2026-10-21: the testers' entries
-// were in one, docs-ship looked in the other). This reads every `keboola-docs-*` log under
-// ~/.claude/plugins/data (and $CLAUDE_PLUGIN_DATA) and prints the newest entry for HEAD^{tree}.
+// The gate appends every decision to <git common dir>/keboola-docs/gate-log.jsonl, which every worktree of
+// the repo shares. Older entries live only in the plugin's data directory, which depends on how the
+// plugin was loaded (`keboola-docs-<marketplace>`, `keboola-docs-inline`: human test, 2026-10-21), so those
+// logs are read too, keeping only entries whose repo is a worktree of this one. A tree id alone is
+// not enough: two clones can hold the same tree.
 //
 // Exit 0: allow. Exit 1: deny, or no entry (the commit bypassed the gate: re-run the checks, e.g.
 // `git commit --amend --no-edit`, which the gate judges against HEAD's parent). Exit 3: skip
@@ -24,10 +24,15 @@ const repo = path.resolve(args.find((a) => !a.startsWith('--')) ?? process.cwd()
 const tree = spawnSync('git', ['rev-parse', 'HEAD^{tree}'], { cwd: repo, encoding: 'utf8' }).stdout?.trim();
 if (!tree) { console.error(`✗ ${repo} is not a git checkout with a HEAD`); process.exit(2); }
 
+const git = (a) => spawnSync('git', a, { cwd: repo, encoding: 'utf8' }).stdout?.trim() ?? '';
+const own = path.join(path.resolve(repo, git(['rev-parse', '--git-common-dir'])), 'keboola-docs', 'gate-log.jsonl');
+const worktrees = new Set(git(['worktree', 'list', '--porcelain']).split('\n')
+  .filter((l) => l.startsWith('worktree ')).map((l) => fs.realpathSync.native(l.slice(9))));
 const base = path.join(os.homedir(), '.claude', 'plugins', 'data');
-const logs = new Set();
+const logs = new Set([own]);
 if (process.env.CLAUDE_PLUGIN_DATA) logs.add(path.join(process.env.CLAUDE_PLUGIN_DATA, 'gate-log.jsonl'));
 if (fs.existsSync(base)) for (const d of fs.readdirSync(base)) if (d.startsWith('keboola-docs-')) logs.add(path.join(base, d, 'gate-log.jsonl'));
+const ofThisRepo = (e) => { try { return worktrees.has(fs.realpathSync.native(e.repo)); } catch { return false; } };
 
 let best = null;
 for (const log of logs) {
@@ -36,7 +41,7 @@ for (const log of logs) {
     if (!line.includes(tree)) continue;
     try {
       const e = JSON.parse(line);
-      if (e.tree === tree && (!best || e.at > best.at)) best = { ...e, log };
+      if (e.tree === tree && (log === own || ofThisRepo(e)) && (!best || e.at > best.at)) best = { ...e, log };
     } catch { /* a torn line */ }
   }
 }

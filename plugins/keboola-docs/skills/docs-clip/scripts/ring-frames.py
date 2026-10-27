@@ -3,7 +3,7 @@
 #
 #   uv run --with pillow python ring-frames.py <frames dir> [--crop full|action] [--hold 1.6] [--final 2.8] [--fps 30]
 #
-# Reads <dir>/rings.json ({order, rings, scale}) and writes the frames of a smooth GIF at 1x: each
+# Reads <dir>/rings.json ({order, rings, scale}) and writes to <dir>/ring-frames/ the frames of a smooth GIF at 1x: each
 # state appears, its ring fades in (~0.25 s), it holds, then it crossfades (~0.4 s) into the next
 # state; the last state crossfades back into the first, so the loop has no jump. Identical frames
 # cost almost nothing in H.264, so the page clip is a 30 fps MP4 loop (Nikita, 2026-10-22: a 5 fps
@@ -32,6 +32,7 @@
 # scrolled between states (one scroll position per GIF, R5). A shot's "hold" (seconds) from the plan
 # overrides --hold for that state.
 import json
+import shutil
 import sys
 from pathlib import Path
 
@@ -40,11 +41,21 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter
 BLUE = (37, 99, 235)
 PAD, WIDTH, RADIUS, GLOW = 6, 3, 10, 4
 MARGIN = 24
-MIN_W, MIN_H, MAX_W = 400, 260, 760
+MAX_W = 760
+
+
+def opt(name, default=None):
+    if name not in sys.argv:
+        return default
+    i = sys.argv.index(name)
+    if i + 1 >= len(sys.argv) or sys.argv[i + 1].startswith('--'):
+        sys.exit(f'{name} needs a value')
+    return sys.argv[i + 1]
 
 
 def arg(name, default):
-    return float(sys.argv[sys.argv.index(name) + 1]) if name in sys.argv else default
+    v = opt(name)
+    return default if v is None else float(v)
 
 
 def ring(im, r, s):
@@ -96,13 +107,8 @@ def crop_box(meta, d, s):
     y0 = min(b['y'] for b in boxes) - MARGIN
     x1 = max(b['x'] + b['w'] for b in boxes) + MARGIN
     y1 = max(b['y'] + b['h'] for b in boxes) + MARGIN
-    # grow a small box around its centre, then shift it inside the frame instead of clipping the margin
-    if x1 - x0 < MIN_W:
-        c = (x0 + x1) / 2; x0, x1 = c - MIN_W / 2, c + MIN_W / 2
-    if y1 - y0 < MIN_H:
-        c = (y0 + y1) / 2; y0, y1 = c - MIN_H / 2, c + MIN_H / 2
-    if x0 < 0: x1, x0 = x1 - x0, 0
-    # at least 60 % of the screen's width and 40 % of its height: a small square crop read badly
+    # at least 60 % of the screen's width and 40 % of its height, grown around the centre and shifted
+    # inside the frame instead of clipping the margin: a small square crop read badly
     cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
     w, h = min(fw, max(x1 - x0, fw * 0.6)), min(fh, max(y1 - y0, fh * 0.4))
     x0, x1, y0, y1 = cx - w / 2, cx + w / 2, cy - h / 2, cy + h / 2
@@ -146,7 +152,7 @@ def crop_mode(meta):
     if '--no-crop' in sys.argv:
         return 'full'
     if '--crop' in sys.argv:
-        return sys.argv[sys.argv.index('--crop') + 1]
+        return opt('--crop')
     c = meta.get('crop')
     return 'box' if isinstance(c, list) else (c or 'full')
 
@@ -163,8 +169,6 @@ def main():
     if mode not in ('full', 'action', 'box'):
         sys.exit(f'--crop is full or action, not {mode!r}')
     crop = crop_box(meta, d, s) if mode in ('action', 'box') else None
-    if mode == 'box' and not meta.get('crop'):
-        crop = None
     bare, ringed = [], []
     for name in meta['order']:
         im = Image.open(d / f'{name}.png').convert('RGBA')
@@ -175,11 +179,16 @@ def main():
                 x = x.crop(tuple(v * s for v in crop))
             out.append(x.convert('RGB').resize((x.width // s, x.height // s), Image.LANCZOS))
         bare.append(out[0]); ringed.append(out[1])
+    # the frames go to their own folder: a shot named g001 used to be overwritten, and a shorter
+    # rerun left the last run's extra frames next to the new ones
+    outdir = d / 'ring-frames'
+    shutil.rmtree(outdir, ignore_errors=True)
+    outdir.mkdir()
     plan, k = [], 0
     def emit(img, n):
         nonlocal k
         k += 1
-        path = d / f'g{k:03d}.png'
+        path = outdir / f'g{k:03d}.png'
         img.save(path)
         plan.append(f'{path}:{n}')
     order = meta['order']

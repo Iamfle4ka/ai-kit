@@ -377,3 +377,27 @@ test('`git commit -m "msg" <paths>` logs the tree the commit records, and gate-v
   assert.equal(none.status, 1);
   assert.match(none.stdout, /bypassed the gate/);
 });
+
+test('a heredoc commit logs its tree in the git dir; gate-verdict ignores the same tree logged by another clone', () => {
+  const dir = repo();
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-home-'));
+  const data = path.join(home, '.claude', 'plugins', 'data', 'keboola-docs-inline');
+  fs.appendFileSync(PAGE(dir, 'clean-howto.md'), '\nOne more line.\n');
+  git(dir, 'add', '-A');
+  // `<<'EOF'` used to be read as a pathspec: the entry had tree null and the commit looked unjudged
+  assert.equal(denied(gate(dir, "git commit -q -F - <<'EOF'\ntouch\nEOF", { CLAUDE_PLUGIN_DATA: data })), null);
+  git(dir, 'commit', '-q', '-m', 'touch');
+  const head = git(dir, 'rev-parse', 'HEAD^{tree}').trim();
+  const own = path.join(dir, '.git', 'keboola-docs', 'gate-log.jsonl');
+  assert.equal(JSON.parse(fs.readFileSync(own, 'utf8').trim().split('\n').pop()).tree, head);
+  const verdict = (d, env) => spawnSync(process.execPath, [path.join(HERE, 'gate-verdict.mjs'), d], { encoding: 'utf8', env: { ...process.env, HOME: home, CLAUDE_PLUGIN_DATA: '', ...env } });
+  fs.rmSync(path.join(data, 'gate-log.jsonl'));   // the git-dir log alone is enough
+  assert.equal(verdict(dir).status, 0);
+  // a clone holds the same tree; the copy in the plugin data dir names the first repo, so it does not count
+  fs.appendFileSync(path.join(data, 'gate-log.jsonl'), fs.readFileSync(own, 'utf8'));
+  const clone = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-clone-'));
+  git(clone, 'clone', '-q', dir, '.');
+  const v = verdict(clone);
+  assert.equal(v.status, 1, v.stdout);
+  assert.match(v.stdout, /bypassed the gate/);
+});

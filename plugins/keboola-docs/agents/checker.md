@@ -52,7 +52,7 @@ If any of these is missing, say so in your first line and check what you can.
 
 Numbers first, then eyes.
 
-1. Run `"${CLAUDE_PLUGIN_ROOT}/scripts/checker/clip_metrics.sh" <clip.mp4> [poster.png] <scratch>/metrics` directly (it is a zsh script: `bash clip_metrics.sh` fails). `${CLAUDE_PLUGIN_ROOT}` is empty in a shell: the plugin lives under `~/.claude/plugins/cache/keboola-docs-plugin/keboola-docs/<version>/`.
+1. Run `"${CLAUDE_PLUGIN_ROOT}/scripts/checker/clip_metrics.sh" <clip.mp4> [poster.png] <scratch>/metrics` directly (it is a zsh script: `bash clip_metrics.sh` fails). For a states clip (the MP4 loop from `states-to-gif.sh`, a `rings.json` next to its frames) add `--states`: it holds the clip to the states budget (250 KB, 3–9 s, 760 px), not the 1 MB / 30 s one. `${CLAUDE_PLUGIN_ROOT}` is empty in a shell: the plugin lives under `~/.claude/plugins/cache/keboola-docs-plugin/keboola-docs/<version>/`.
    Budgets for a clip on a docs page: at most 30 s and 1 MB; brightness mean at least 200 and
    no sampled frame under 180, because the page is white and a darker clip reads as a dark
    block; a poster that exists, matches the clip's size and is bright too. A states clip inside a page

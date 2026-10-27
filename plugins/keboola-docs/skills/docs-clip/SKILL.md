@@ -30,8 +30,8 @@ Hard rules, from the people who review this section:
   scrim over the rest. The dimmed spotlight made the hub clip average a luma of 71 of 255 against
   229 for its screenshots, and Nikita rejected it as dark (24 Sep 2026). Budget: mean luma at least
   200 and no frame under 180, poster included, measured with
-  `"${CLAUDE_PLUGIN_ROOT}/scripts/checker/clip_metrics.sh" <clip> <poster> <out>`, which also writes the contact
-  sheet.
+  `"${CLAUDE_PLUGIN_ROOT}/scripts/checker/clip_metrics.sh" <clip> <poster> <out>` (`--states` for a states clip,
+  which holds it to 250 KB and 3–9 s), which also writes the contact sheet.
 - **An overview page may use an explainer instead of a screen recording:** words and numbered dots
   on a line that draws itself, then a real screenshot and a closing question
   (`scripts/explainer.html`, recorded with `record-composite.mjs --page explainer.html <image> 1280

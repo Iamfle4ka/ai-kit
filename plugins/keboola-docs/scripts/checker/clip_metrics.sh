@@ -1,6 +1,6 @@
 #!/bin/zsh
 # clip_metrics.sh — the numbers a docs clip is judged by, so no one has to eyeball them.
-# Usage: clip_metrics.sh [--page-width <px>] <clip.mp4|clip.gif> [poster.png|.jpg|.webp] [out_dir]
+# Usage: clip_metrics.sh [--states] [--page-width <px>] <clip.mp4|clip.gif> [poster.png|.jpg|.webp] [out_dir]
 # The second argument is taken as the poster only when it has an image extension, so
 # `clip_metrics.sh clip.mp4 <out_dir>` works too.
 # --page-width: how wide the page shows a full-width clip, default 713. Measured 2026-10-06 on a
@@ -8,13 +8,14 @@
 # 1280-px window. Text a reader sees = canvas px x (713 / 1280) on a 1280-wide clip; the page
 # shrinks a wider clip to the column (max-width: 100%) but never enlarges a narrower one.
 # Prints duration, size, brightness (mean / min / darkest seconds), color range, cuts, and writes a contact sheet.
-# Budgets it checks (docs-clip skill): an MP4 on a page <= 30 s and <= 1 MB; a GIF <= 250 KB and 3-9 s;
+# Budgets it checks (docs-clip skill): an MP4 on a page <= 30 s and <= 1 MB; a GIF, or a states clip
+# (--states: the MP4 loop states-to-gif.sh writes), <= 250 KB, 3-9 s and <= 760 px wide;
 # either one bright: mean luma >= 200 and every sampled frame >= 180; the poster >= 180 too.
 # The luma budget is measured on limited-range (tv) video, which is what yuv420p H.264 normally is
 # (PNG and GIF frames are converted to tv range before they are measured). A full-range file
 # (yuvj420p, color_range=pc) reads about 18 points brighter for the same picture, so the script
 # prints the color range it measured and warns on pc; the budgets stay as they are.
-zparseopts -D -E -F -- -page-width:=pw || exit 2
+zparseopts -D -E -F -- -page-width:=pw -states=st || exit 2
 page_w="${${pw[-1]}#=}"; page_w="${page_w:-713}"
 [[ "$page_w" == <1-> ]] || { echo "--page-width takes a width in px, got: $page_w"; exit 2; }
 clip="$1"; poster=""; out=""
@@ -47,9 +48,11 @@ ffmpeg -v error -y -i "$clip" -vf "fps=1/1.5,scale=640:-1,tile=4x5:margin=4:padd
 ok() { [[ "$1" == 1 ]] && echo "ok" || echo "OVER BUDGET"; }
 echo "clip:        $clip"
 echo "dims / fps:  $dims @ $fps"
-if [[ "${clip:l}" == *.gif ]]; then
-  printf 'duration:    %.1f s   [%s, budget 3-9 s for a GIF]\n' "$dur" "$(ok $(echo "$dur >= 3 && $dur <= 9" | bc -l))"
-  printf 'size:        %s B      [%s, budget 250 KB for a GIF]\n' "$size" "$(ok $(( size <= 256000 )))"
+if [[ "${clip:l}" == *.gif || -n "$st" ]]; then
+  kind=$([[ -n "$st" ]] && echo "a states clip" || echo "a GIF")
+  printf 'duration:    %.1f s   [%s, budget 3-9 s for %s]\n' "$dur" "$(ok $(echo "$dur >= 3 && $dur <= 9" | bc -l))" "$kind"
+  printf 'size:        %s B      [%s, budget 250 KB for %s]\n' "$size" "$(ok $(( size <= 256000 )))" "$kind"
+  printf 'width:       %s px     [%s, budget 760 px for %s]\n' "${dims%x*}" "$(ok $(( ${dims%x*} <= 760 )))" "$kind"
 else
   printf 'duration:    %.1f s   [%s, budget 30 s]\n' "$dur" "$(ok $(echo "$dur <= 30" | bc -l))"
   printf 'size:        %s B      [%s, budget 1 MB]\n' "$size" "$(ok $(( size <= 1048576 )))"
