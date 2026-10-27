@@ -146,6 +146,17 @@ for (const line of diff.stdout.split('\n')) {
   else if (s === 'R') { if (isPage(a)) retired.push(a); if (isPage(b)) { pages.push(b); if (isPage(a)) renamedFrom.set(b, a); } }
   else if (isPage(a)) pages.push(a);
 }
+// A merge commit brings the merged-in side's pages along (#1209, 2026-10-27: main's own line-ending
+// changes and a main page's missing Next blocked a merge of main). A file whose content equals that
+// side's version came from there and is not this commit's change; a conflict resolution differs from
+// both sides and is still judged.
+const mergeHead = git(['rev-parse', '-q', '--verify', 'MERGE_HEAD']).stdout?.trim();
+if (mergeHead) {
+  const blob = (spec) => { const r = git(['rev-parse', '-q', '--verify', spec]); return r.status === 0 ? r.stdout.trim() : null; };
+  const now = (f) => (ALL ? (fs.existsSync(path.join(root, f)) ? git(['hash-object', '--', f]).stdout?.trim() || null : null) : blob(`:${f}`));
+  const fromThem = (f) => now(f) === blob(`${mergeHead}:${f}`);
+  for (const list of [pages, retired, deletedMedia]) list.splice(0, list.length, ...list.filter((f) => !fromThem(f)));
+}
 if (!pages.length && !retired.length && !deletedMedia.length) { logDecision('allow', { scope: ALL ? 'worktree' : 'index', note: 'no docs change' }); process.exit(0); }
 
 const fails = [], warns = [];

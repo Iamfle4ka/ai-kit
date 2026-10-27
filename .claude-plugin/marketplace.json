@@ -67,7 +67,7 @@
     {
       "name": "keboola-docs",
       "description": "For contributors to keboola/connection-docs (help.keboola.com): write, update, retire and ship pages by the Diátaxis rules, with a guided page workflow, rule, link and VERIFY checks, UI screenshots and clips (Remotion included), a commit gate and PR labels.",
-      "version": "0.7.7",
+      "version": "0.7.8",
       "source": "./plugins/keboola-docs",
       "category": "documentation"
     }

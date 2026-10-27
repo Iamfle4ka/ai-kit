@@ -401,3 +401,22 @@ test('a heredoc commit logs its tree in the git dir; gate-verdict ignores the sa
   assert.equal(v.status, 1, v.stdout);
   assert.match(v.stdout, /bypassed the gate/);
 });
+
+test("a merge commit is judged on its own changes, not on the merged-in side's pages", () => {
+  const dir = repo();
+  git(dir, 'branch', '-M', 'main');
+  git(dir, 'checkout', '-q', '-b', 'feature');
+  fs.appendFileSync(PAGE(dir, 'clean-howto.md'), '\nA feature line.\n');
+  git(dir, 'commit', '-q', '-am', 'feature');
+  git(dir, 'checkout', '-q', 'main');
+  // main brings a page with a FAIL (no lede) and a CRLF rewrite of another page
+  fs.writeFileSync(PAGE(dir, 'from-main.md'), "---\ntitle: From main\nslug: 'guide/from-main'\ndescription: 'x'\n---\n\n## Starts with a heading\n\ntext\n");
+  git(dir, 'add', '-A'); git(dir, 'commit', '-q', '-m', 'main moves on');
+  git(dir, 'checkout', '-q', 'feature');
+  spawnSync('git', ['merge', '--no-commit', '--no-ff', 'main'], { cwd: dir, env: GIT_ENV });
+  assert.equal(denied(gate(dir, 'git commit --no-edit')), null, 'main\'s page is not this merge\'s change');
+  // a resolution that edits main's page is judged
+  fs.appendFileSync(PAGE(dir, 'from-main.md'), '\nEdited in the merge.\n');
+  git(dir, 'add', '-A');
+  assert.match(denied(gate(dir, 'git commit --no-edit')) ?? '', /from-main\.md:\d+ D3 /);
+});
